@@ -1,0 +1,74 @@
+package nu
+
+import (
+	"bytes"
+	"context"
+	"errors"
+	"fmt"
+	"io"
+	"log/slog"
+	"reflect"
+	"testing"
+
+	"github.com/neilotoole/slogt"
+	"github.com/vmihailenco/msgpack/v5"
+)
+
+/*
+PluginResponse returns plugin "p" response to the message "msg".
+The message is pointer to Go nu-protocol message structure, ie
+
+	PluginResponse(ctx, p, &Call{ID: 1, Call: Signature{}})
+*/
+func PluginResponse(ctx context.Context, p *Plugin, msg any) ([]byte, error) {
+	outBuf := &bytes.Buffer{}
+	p.out = outBuf
+
+	r, w := io.Pipe()
+	p.in = r
+
+	done := make(chan error, 1)
+	go func() {
+		defer close(done)
+		if err := p.mainMsgLoop(ctx); err != nil {
+			done <- fmt.Errorf("plugin loop exited with error: %w", err)
+		}
+	}()
+
+	if err := msgpack.NewEncoder(w).Encode(msg); err != nil {
+		done <- fmt.Errorf("encoding the message: %w", err)
+	}
+	w.Close()
+
+	var err error
+	for e := range done {
+		err = errors.Join(err, e)
+	}
+	return outBuf.Bytes(), err
+}
+
+/*
+Parses all nu-plugin-protocol messages (both server and client).
+*/
+func decodeNuMsgAll(next func(d *msgpack.Decoder, name string) (_ interface{}, err error)) func(*msgpack.Decoder) (interface{}, error) {
+	return func(dec *msgpack.Decoder) (interface{}, error) {
+		name, err := decodeWrapperMap(dec)
+		if err != nil {
+			return nil, fmt.Errorf("decode message: %w", err)
+		}
+		switch name {
+		case "CallResponse":
+			cr := callResponse{}
+			return cr, dec.DecodeValue(reflect.ValueOf(&cr))
+		case "PipelineData":
+			cr := pipelineData{}
+			return cr, dec.DecodeValue(reflect.ValueOf(&cr))
+		default:
+			return next(dec, name)
+		}
+	}
+}
+
+func logger(t *testing.T) *slog.Logger {
+	return slogt.New(t)
+}
