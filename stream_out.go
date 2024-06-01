@@ -26,8 +26,8 @@ type rawStreamOut struct {
 	id     int
 	data   io.WriteCloser // input from plugin
 	rdr    *io.PipeReader
-	sent   chan struct{} // has the last Data msg been Ack-ed?
-	send   func(ID int, b []byte) error
+	sent   chan struct{} // has the latest Data msg been Ack-ed?
+	onSend func(ID int, b []byte) error
 	_close func()
 	onDrop func()
 	cfg    rawStreamCfg
@@ -71,7 +71,7 @@ func (rc *rawStreamOut) run(ctx context.Context) error {
 			return fmt.Errorf("reading data: %w", err)
 		}
 		if len(buf) > 0 {
-			if err := rc.send(rc.id, buf); err != nil {
+			if err := rc.onSend(rc.id, buf); err != nil {
 				return fmt.Errorf("sending data: %w", err)
 			}
 			// use select and check for cxt.Done?
@@ -116,7 +116,7 @@ type listStreamOut struct {
 	id     int
 	sent   chan struct{}
 	data   chan Value
-	send   func(ID int, v Value) error
+	onSend func(ID int, v Value) error
 	onDrop func()
 	_close func()
 }
@@ -137,7 +137,7 @@ main_loop:
 			if !ok {
 				break main_loop
 			}
-			if err := rc.send(rc.id, v); err != nil {
+			if err := rc.onSend(rc.id, v); err != nil {
 				return fmt.Errorf("send: %w", err)
 			}
 		case <-ctx.Done():

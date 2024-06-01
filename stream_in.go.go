@@ -19,7 +19,7 @@ func newInputStreamRaw(id int) *rawStreamIn {
 type rawStreamIn struct {
 	id       int
 	inFlight chan struct{}
-	ack      func(ID int) // plugin has consumed the last Data msg
+	onAck    func(ID int) // plugin has consumed the latest Data msg
 	data     io.WriteCloser
 	rdr      io.ReadCloser
 }
@@ -38,11 +38,12 @@ func (lsi *rawStreamIn) received(ctx context.Context, v any) error {
 	go func() {
 		lsi.data.Write(in)
 		<-lsi.inFlight
-		lsi.ack(lsi.id)
+		lsi.onAck(lsi.id)
 	}()
 
 	return nil
 }
+
 func (lsi *rawStreamIn) endOfData() {
 	go func() {
 		select {
@@ -55,7 +56,7 @@ func (lsi *rawStreamIn) endOfData() {
 
 func newInputStreamList(id int) *listStreamIn {
 	in := &listStreamIn{
-		ID:       id,
+		id:       id,
 		data:     make(chan Value),
 		inFlight: make(chan struct{}, 1),
 	}
@@ -63,12 +64,19 @@ func newInputStreamList(id int) *listStreamIn {
 }
 
 type listStreamIn struct {
-	ID       int
-	data     chan Value // incoming data to be consumed by plugin
+	id   int
+	data chan Value // incoming data to be consumed by plugin
+
+	// "semaphore" to keep track has the last item been ack-ed and
+	// consumer is ready for next one
 	inFlight chan struct{}
-	ack      func(ID int) // plugin has consumed the last Data msg
+
+	// this callback is triggered to signal that the last item received
+	// has been processed, consumer is ready for the next one
+	onAck func(ID int)
 }
 
+// return (readonly) chan to the command's Run handler
 func (lsi *listStreamIn) InputStream() <-chan Value {
 	return lsi.data
 }
@@ -90,7 +98,7 @@ func (lsi *listStreamIn) received(ctx context.Context, v any) error {
 		select {
 		case lsi.data <- in:
 			<-lsi.inFlight
-			lsi.ack(lsi.ID)
+			lsi.onAck(lsi.id)
 		case <-ctx.Done():
 			return
 		}

@@ -13,11 +13,11 @@ import (
 	"github.com/vmihailenco/msgpack/v5"
 )
 
-// exit cause when plugin received Goodbye message
+// ErrGoodbye is the exit cause when plugin received Goodbye message.
 var ErrGoodbye = errors.New("Goodbye")
 
-// context cancellation (command's OnRun handler) or stream close error when
-// consumer sent Drop message (ie plugin should stop producing into output stream).
+// ErrDropStream is context cancellation (command's OnRun handler) or stream close error
+// when consumer sent Drop message (ie plugin should stop producing into output stream).
 var ErrDropStream = errors.New("received Drop stream message")
 
 /*
@@ -211,7 +211,7 @@ func (p *Plugin) handleRun(ctx context.Context, msg run, callID int) error {
 		exec.Input = it
 	case listStream:
 		ls := newInputStreamList(it.ID)
-		ls.ack = func(ID int) {
+		ls.onAck = func(ID int) {
 			if err := p.outputMsg(ctx, ack{ID: ID}); err != nil {
 				p.log.ErrorContext(ctx, "sending Ack", attrError(err), attrStreamID(ID))
 			}
@@ -223,7 +223,7 @@ func (p *Plugin) handleRun(ctx context.Context, msg run, callID int) error {
 	case externalStream:
 		p.log.DebugContext(ctx, fmt.Sprintf("input stdout: %#v", it.Stdout))
 		ls := newInputStreamRaw(it.Stdout.ID)
-		ls.ack = func(ID int) {
+		ls.onAck = func(ID int) {
 			if err := p.outputMsg(ctx, ack{ID: ID}); err != nil {
 				p.log.ErrorContext(ctx, "sending Ack", attrError(err), attrStreamID(ID))
 			}

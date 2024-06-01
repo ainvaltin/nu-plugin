@@ -35,10 +35,9 @@ func Test_Plugin_Run(t *testing.T) {
 
 	t.Run("cancel context", func(t *testing.T) {
 		p := createPlugin(t)
-		pOut := bytes.NewBuffer(nil)
 		r, w := io.Pipe()
 		p.in = r
-		p.out = pOut
+		p.out = bytes.NewBuffer(nil)
 
 		ctx, cancel := context.WithCancel(context.Background())
 		done := make(chan error)

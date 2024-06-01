@@ -9,6 +9,9 @@ type LabeledError struct {
 	Inner  []LabeledError `msgpack:"inner,omitempty"`
 }
 
+/*
+ErrorLabel is "label" type for [LabeledError].
+*/
 type ErrorLabel struct {
 	Text string `msgpack:"text"`
 	Span Span   `msgpack:"span"`
@@ -26,6 +29,11 @@ func AsLabeledError(err error) *LabeledError {
 	return &LabeledError{Msg: err.Error()}
 }
 
+/*
+Error implements Go "error" interface.
+
+The "Msg" is returned as error message.
+*/
 func (le *LabeledError) Error() string {
 	return le.Msg
 }

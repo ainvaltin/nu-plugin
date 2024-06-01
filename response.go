@@ -54,7 +54,7 @@ func (ec *ExecCommand) ReturnListStream(ctx context.Context) (chan<- Value, erro
 		return nil, fmt.Errorf("response has been already sent")
 	}
 
-	out.send = func(id int, v Value) error {
+	out.onSend = func(id int, v Value) error {
 		return ec.p.outputMsg(ctx, &data{ID: id, Data: v})
 	}
 	out.setOnDone(func(id int) { ec.p.outputMsg(ctx, end{ID: id}) })
@@ -84,7 +84,7 @@ func (ec *ExecCommand) ReturnRawStream(ctx context.Context, opts ...RawStreamOpt
 		return nil, fmt.Errorf("response has been already sent")
 	}
 
-	out.send = func(ID int, b []byte) error {
+	out.onSend = func(ID int, b []byte) error {
 		return ec.p.outputMsg(ctx, &data{ID: ID, Data: b})
 	}
 	out.setOnDone(func(id int) { ec.p.outputMsg(ctx, end{ID: id}) })

@@ -10,6 +10,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/neilotoole/slogt"
 	"github.com/vmihailenco/msgpack/v5"
 )
@@ -71,4 +72,15 @@ func decodeNuMsgAll(next func(d *msgpack.Decoder, name string) (_ interface{}, e
 
 func logger(t *testing.T) *slog.Logger {
 	return slogt.New(t)
+}
+
+func expectErrorMsg(t *testing.T, err error, msg string) {
+	t.Helper()
+	if err == nil {
+		t.Fatal("expected error, got none")
+	}
+
+	if diff := cmp.Diff(err.Error(), msg); diff != "" {
+		t.Errorf("error message mismatch (-want +got):\n%s", diff)
+	}
 }

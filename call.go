@@ -94,7 +94,6 @@ func decodeCall(dec *msgpack.Decoder) (any, error) {
 		switch name {
 		case "Run":
 			r := run{Call: EvaluatedCall{Named: NamedParams{}}}
-			//if err := d.DecodeValue(reflect.ValueOf(&r)); err != nil {
 			if err := r.DecodeMsgpack(dec); err != nil {
 				return nil, fmt.Errorf("decoding Run: %w", err)
 			}
@@ -235,6 +234,10 @@ type npName struct {
 	Span Span   `msgpack:"span"`
 }
 
+/*
+StringValue returns value of the named parameter "name" if set or "def"
+when not set.
+*/
 func (np NamedParams) StringValue(name, def string) string {
 	v, ok := np[name]
 	if !ok {
@@ -244,7 +247,8 @@ func (np NamedParams) StringValue(name, def string) string {
 	case string:
 		return d
 	default:
-		return fmt.Sprintf("can't convert %T to string (%s)", d, name)
+		// TODO: either return error or panic?
+		return fmt.Sprintf("parameter %q is of type %T not string", name, d)
 	}
 }
 

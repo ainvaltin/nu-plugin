@@ -17,7 +17,7 @@ func Test_rawStreamOut(t *testing.T) {
 		consumer := bytes.NewBuffer(nil)
 		ls := newOutputListRaw(1)
 		ls.cfg.bufSize = 5
-		ls.send = func(ID int, v []byte) error { _, err := consumer.Write(v); return err }
+		ls.onSend = func(ID int, v []byte) error { _, err := consumer.Write(v); return err }
 		ls.setOnDone(func(id int) {})
 
 		runDone := make(chan error)
@@ -70,9 +70,49 @@ func Test_rawStreamOut(t *testing.T) {
 		}
 	})
 
+	t.Run("multiple writes collected and sent", func(t *testing.T) {
+		ls := newOutputListRaw(1)
+		ls.setOnDone(func(id int) {})
+		// we set buf size so big that we do not expect any onSend calls
+		ls.cfg.bufSize = 1024
+		ls.onSend = func(ID int, v []byte) error { t.Errorf("unexpected onSend call with %x", v); return nil }
+
+		runDone := make(chan error)
+		go func() {
+			runDone <- ls.run(context.Background())
+		}()
+
+		// multiple writes should succeed without blocking as buffer is
+		// bigger than the data sent by the plugin
+		ls.data.Write(bytes.Repeat([]byte{1}, 10))
+		ls.data.Write(bytes.Repeat([]byte{2}, 10))
+		ls.data.Write(bytes.Repeat([]byte{3}, 10))
+		// closing the writer should trigger sending the data
+		consumer := bytes.NewBuffer(nil)
+		ls.onSend = func(ID int, v []byte) error { _, err := consumer.Write(v); return err }
+		if err := ls.data.Close(); err != nil {
+			t.Errorf("unexpected error closing the writer: %v", err)
+		}
+		// ack allows "run" to exit and makes sure that the onSend has
+		// time to happen (run triggers it in a goroutine)
+		ls.ack()
+		select {
+		case err := <-runDone:
+			if err != nil {
+				t.Errorf("run exited with unexpected error: %v", err)
+			}
+		case <-time.After(time.Second):
+			t.Error("run hasn't exited")
+		}
+		// make sure we got the same data in the output we wrote into writer
+		if diff := cmp.Diff(consumer.Bytes(), slices.Concat(bytes.Repeat([]byte{1}, 10), bytes.Repeat([]byte{2}, 10), bytes.Repeat([]byte{3}, 10))); diff != "" {
+			t.Errorf("data mismatch (-want +got):\n%s", diff)
+		}
+	})
+
 	t.Run("not sending anything", func(t *testing.T) {
 		ls := newOutputListRaw(1)
-		ls.send = func(ID int, v []byte) error { t.Errorf("unexpected call: %v", v); return nil }
+		ls.onSend = func(ID int, v []byte) error { t.Errorf("unexpected call: %v", v); return nil }
 
 		var onDoneCalled atomic.Bool
 		ls.setOnDone(func(id int) { onDoneCalled.Store(true) })
@@ -119,7 +159,7 @@ func Test_rawStreamOut(t *testing.T) {
 func Test_listStreamOut(t *testing.T) {
 	t.Run("sending data blocks until Ack-ed", func(t *testing.T) {
 		ls := newOutputListValue(1)
-		ls.send = func(ID int, v Value) error { return nil }
+		ls.onSend = func(ID int, v Value) error { return nil }
 		ls.setOnDone(func(id int) {})
 
 		runDone := make(chan error)
@@ -162,7 +202,7 @@ func Test_listStreamOut(t *testing.T) {
 	t.Run("onDone is called", func(t *testing.T) {
 		done := make(chan struct{})
 		ls := newOutputListValue(77)
-		ls.send = func(ID int, v Value) error { return nil }
+		ls.onSend = func(ID int, v Value) error { return nil }
 		ls.setOnDone(func(id int) {
 			if id != 77 {
 				t.Errorf("expected stream id 77, got %d", id)
@@ -198,7 +238,7 @@ func Test_listStreamOut(t *testing.T) {
 	t.Run("ctx cancel stops the loop: waiting input", func(t *testing.T) {
 		runDone := make(chan error)
 		ls := newOutputListValue(77)
-		ls.send = func(ID int, v Value) error { return nil }
+		ls.onSend = func(ID int, v Value) error { return nil }
 		ls.setOnDone(func(id int) { t.Error("shouldn't be called") })
 
 		ctx, cancel := context.WithCancel(context.Background())
@@ -221,7 +261,7 @@ func Test_listStreamOut(t *testing.T) {
 	t.Run("ctx cancel stops the loop: waiting ack", func(t *testing.T) {
 		runDone := make(chan error)
 		ls := newOutputListValue(77)
-		ls.send = func(ID int, v Value) error { return nil }
+		ls.onSend = func(ID int, v Value) error { return nil }
 		ls.setOnDone(func(id int) { t.Error("shouldn't be called") })
 
 		ctx, cancel := context.WithCancel(context.Background())
