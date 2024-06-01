@@ -10,7 +10,13 @@ import (
 
 type ExecCommand struct {
 	Name string
-	Call EvaluatedCall
+
+	// Span of the command invocation
+	Head Span
+	// Values of positional arguments
+	Positional []Value
+	// Names and values of named arguments
+	Named NamedParams
 
 	/*
 		Input to the command. Is one of:

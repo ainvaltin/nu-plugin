@@ -10,6 +10,8 @@ import (
 Config is Plugin's configuration, mostly meant to allow debugging.
 */
 type Config struct {
+	// Logger the Plugin should use. If not provided the plugin will create
+	// Error level logger which logs to stderr.
 	Logger *slog.Logger
 
 	// if assigned incoming data is also copied to this writer.

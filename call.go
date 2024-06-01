@@ -18,7 +18,7 @@ type (
 
 	run struct {
 		Name  string        `msgpack:"name"`
-		Call  EvaluatedCall `msgpack:"call"`
+		Call  evaluatedCall `msgpack:"call"`
 		Input any           `msgpack:"input,omitempty"`
 	}
 
@@ -28,7 +28,7 @@ type (
 	}
 )
 
-type EvaluatedCall struct {
+type evaluatedCall struct {
 	Head       Span        `msgpack:"head"`
 	Positional []Value     `msgpack:"positional"`
 	Named      NamedParams `msgpack:"named"`
@@ -93,7 +93,7 @@ func decodeCall(dec *msgpack.Decoder) (any, error) {
 		}
 		switch name {
 		case "Run":
-			r := run{Call: EvaluatedCall{Named: NamedParams{}}}
+			r := run{Call: evaluatedCall{Named: NamedParams{}}}
 			if err := r.DecodeMsgpack(dec); err != nil {
 				return nil, fmt.Errorf("decoding Run: %w", err)
 			}

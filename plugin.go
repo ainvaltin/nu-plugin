@@ -23,8 +23,7 @@ var ErrDropStream = errors.New("received Drop stream message")
 /*
 New creates new Nushell Plugin with given commands.
 
-The cfg may be nil. In that case Error level logger is used (logs to stderr), to
-disable logging completely provide Config with NOP logger.
+The cfg may be nil, in that case default configuration will be used.
 */
 func New(cmd []*Command, cfg *Config) (*Plugin, error) {
 	p := &Plugin{
@@ -38,11 +37,11 @@ func New(cmd []*Command, cfg *Config) (*Plugin, error) {
 	}
 
 	for _, v := range cmd {
-		cmdName := v.Sig.Name
+		cmdName := v.Signature.Name
 		if _, ok := p.cmds[cmdName]; ok {
 			return nil, fmt.Errorf("command %q already registered", cmdName)
 		}
-		if err := v.Sig.Named.addHelp(); err != nil {
+		if err := v.Signature.Named.addHelp(); err != nil {
 			p.log.Warn(fmt.Sprintf("adding help flag to %q command", cmdName), attrError(err))
 		}
 		if err := v.Validate(); err != nil {
@@ -198,10 +197,12 @@ func (p *Plugin) handleRun(ctx context.Context, msg run, callID int) error {
 	}
 
 	exec := &ExecCommand{
-		p:      p,
-		callID: callID,
-		Name:   msg.Name,
-		Call:   msg.Call,
+		p:          p,
+		callID:     callID,
+		Name:       msg.Name,
+		Head:       msg.Call.Head,
+		Positional: msg.Call.Positional,
+		Named:      msg.Call.Named,
 	}
 
 	switch it := msg.Input.(type) {

@@ -19,7 +19,7 @@ func Test_Plugin_Run(t *testing.T) {
 		p, err := New(
 			[]*Command{
 				{
-					Sig: PluginSignature{Name: "foo bar", Category: "Experimental"},
+					Signature: PluginSignature{Name: "foo bar", Category: "Experimental"},
 					OnRun: func(ctx context.Context, exec *ExecCommand) error {
 						return nil
 					},
@@ -140,7 +140,7 @@ func Test_Plugin_Run(t *testing.T) {
 func Test_Plugin_Signature(t *testing.T) {
 	p, err := New([]*Command{
 		{
-			Sig: PluginSignature{Name: "foo bar", Category: "Experimental"},
+			Signature: PluginSignature{Name: "foo bar", Category: "Experimental"},
 			OnRun: func(ctx context.Context, exec *ExecCommand) error {
 				return nil
 			},
@@ -163,7 +163,7 @@ func Test_Plugin_response(t *testing.T) {
 	t.Run("Error response", func(t *testing.T) {
 		p, err := New([]*Command{
 			{
-				Sig: PluginSignature{Name: "inc", Category: "Experimental"},
+				Signature: PluginSignature{Name: "inc", Category: "Experimental"},
 				OnRun: func(ctx context.Context, exec *ExecCommand) error {
 					return fmt.Errorf("sorry")
 				},
@@ -184,7 +184,7 @@ func Test_Plugin_response(t *testing.T) {
 	t.Run("Single Value response", func(t *testing.T) {
 		p, err := New([]*Command{
 			{
-				Sig: PluginSignature{Name: "inc", Category: "Experimental"},
+				Signature: PluginSignature{Name: "inc", Category: "Experimental"},
 				OnRun: func(ctx context.Context, exec *ExecCommand) error {
 					return exec.ReturnValue(ctx, Value{Value: 42})
 				},
@@ -205,7 +205,7 @@ func Test_Plugin_response(t *testing.T) {
 	t.Run("List of Values response", func(t *testing.T) {
 		p, err := New([]*Command{
 			{
-				Sig: PluginSignature{Name: "inc", Category: "Experimental"},
+				Signature: PluginSignature{Name: "inc", Category: "Experimental"},
 				OnRun: func(ctx context.Context, exec *ExecCommand) error {
 					out, err := exec.ReturnListStream(ctx)
 					if err != nil {
@@ -239,7 +239,7 @@ func Test_Plugin_response(t *testing.T) {
 	t.Run("List of bytes response", func(t *testing.T) {
 		p, err := New([]*Command{
 			{
-				Sig: PluginSignature{Name: "inc", Category: "Experimental"},
+				Signature: PluginSignature{Name: "inc", Category: "Experimental"},
 				OnRun: func(ctx context.Context, exec *ExecCommand) error {
 					out, err := exec.ReturnRawStream(ctx)
 					if err != nil {
@@ -272,7 +272,7 @@ func Test_Plugin_input(t *testing.T) {
 	t.Run("Empty input", func(t *testing.T) {
 		p, err := New([]*Command{
 			{
-				Sig: PluginSignature{Name: "inc", Category: "Experimental"},
+				Signature: PluginSignature{Name: "inc", Category: "Experimental"},
 				OnRun: func(ctx context.Context, exec *ExecCommand) error {
 					switch vt := exec.Input.(type) {
 					case Empty:
@@ -297,7 +297,7 @@ func Test_Plugin_input(t *testing.T) {
 	t.Run("Single Value", func(t *testing.T) {
 		p, err := New([]*Command{
 			{
-				Sig: PluginSignature{Name: "inc", Category: "Experimental"},
+				Signature: PluginSignature{Name: "inc", Category: "Experimental"},
 				OnRun: func(ctx context.Context, exec *ExecCommand) error {
 					switch vt := exec.Input.(type) {
 					case Value:
@@ -325,7 +325,7 @@ func Test_Plugin_input(t *testing.T) {
 	t.Run("Value List", func(t *testing.T) {
 		p, err := New([]*Command{
 			{
-				Sig: PluginSignature{Name: "inc", Category: "Experimental"},
+				Signature: PluginSignature{Name: "inc", Category: "Experimental"},
 				OnRun: func(ctx context.Context, exec *ExecCommand) error {
 					var in <-chan Value
 					switch vt := exec.Input.(type) {

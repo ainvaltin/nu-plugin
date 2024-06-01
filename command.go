@@ -12,15 +12,15 @@ import (
 Command describes an command provided by the plugin.
 */
 type Command struct {
-	Sig PluginSignature `msgpack:"sig"`
-	Exm Examples        `msgpack:"examples"`
+	Signature PluginSignature `msgpack:"sig"`
+	Examples  Examples        `msgpack:"examples"`
 
 	// callback executed on command invocation
 	OnRun func(context.Context, *ExecCommand) error `msgpack:"-"`
 }
 
 func (c Command) Validate() error {
-	if err := c.Sig.Validate(); err != nil {
+	if err := c.Signature.Validate(); err != nil {
 		return err
 	}
 	if c.OnRun == nil {
