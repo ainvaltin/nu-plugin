@@ -20,7 +20,7 @@ func Test_Call_DeEncode_happy(t *testing.T) {
 		{ID: 0, Call: run{Name: "inc", Input: listStream{ID: 2}, Call: evaluatedCall{Head: Span{Start: 40400, End: 40403}, Positional: []Value{}, Named: NamedParams{}}}},
 		{ID: 2, Call: run{Name: "inc", Input: Empty{}, Call: evaluatedCall{Head: Span{Start: 40400, End: 40403}, Positional: []Value{{Value: "0.1.2", Span: Span{Start: 40407, End: 40415}}}, Named: NamedParams{}}}},
 		// named params encoding differs when sent to plugin (compared to when plugin sends it's signature)... should implement as different types!
-		//{ID: 2, Call: run{Name: "inc", Call: EvaluatedCall{Head: Span{Start: 40400, End: 40403}, Positional: []Value{{Value: "0.1.2", Span: Span{Start: 40407, End: 40415}}}, Named: NamedParams{"major": Value{Value: true, Span: Span{Start: 40404, End: 40406}}}}}},
+		//{ID: 2, Call: run{Name: "inc", Call: evaluatedCall{Head: Span{Start: 40400, End: 40403}, Positional: []Value{{Value: "0.1.2", Span: Span{Start: 40407, End: 40415}}}, Named: NamedParams{"major": Value{Value: true, Span: Span{Start: 40404, End: 40406}}}}}},
 	}
 
 	for x, tc := range testCases {

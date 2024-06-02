@@ -30,14 +30,14 @@ func (c Command) Validate() error {
 }
 
 type PluginSignature struct {
-	Name               string          `msgpack:"name"`
-	Usage              string          `msgpack:"usage"`
-	UsageEx            string          `msgpack:"extra_usage"`
-	SearchTerms        []string        `msgpack:"search_terms"`
-	Category           string          `msgpack:"category"` // https://docs.rs/nu-protocol/latest/nu_protocol/enum.Category.html
-	RequiredPositional PositionalArgs  `msgpack:"required_positional"`
-	OptionalPositional PositionalArgs  `msgpack:"optional_positional,"`
-	RestPositional     []PositionalArg `msgpack:"rest_positional,omitempty"`
+	Name               string         `msgpack:"name"`
+	Usage              string         `msgpack:"usage"`
+	UsageEx            string         `msgpack:"extra_usage"`
+	SearchTerms        []string       `msgpack:"search_terms"`
+	Category           string         `msgpack:"category"` // https://docs.rs/nu-protocol/latest/nu_protocol/enum.Category.html
+	RequiredPositional PositionalArgs `msgpack:"required_positional"`
+	OptionalPositional PositionalArgs `msgpack:"optional_positional,"`
+	RestPositional     *PositionalArg `msgpack:"rest_positional,omitempty"`
 
 	// The "help" (short "h") flag will be added automatically when plugin
 	// is created, do not use these names for other flags or arguments.

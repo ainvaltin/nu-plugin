@@ -252,6 +252,32 @@ func (np NamedParams) StringValue(name, def string) string {
 	}
 }
 
+/*
+Check if a flag (named parameter that does not take a value) is set.
+
+Returns "true" if flag is set or passed true value, returns "false" if flag is
+not set or passed "false" value. Returns error if passed value is not a boolean.
+
+Note that the long name must be used to query the flags!
+*/
+func (np NamedParams) HasFlag(name string) (bool, error) {
+	v, ok := np[name]
+	if !ok {
+		return false, nil
+	}
+
+	switch tv := v.Value.(type) {
+	case nil: // just flag, without value, ie "cmd -f"
+		return true, nil
+	case bool: // flag with value, ie "cmd -f=false"
+		return tv, nil
+	default:
+		// the nu makes actually good job making sure that only bool values are
+		// accepted so could get rid of error return and panic (should never happen)?
+		return false, fmt.Errorf("flag's value must be bool, got %T", tv)
+	}
+}
+
 var _ msgpack.CustomEncoder = (*callResponse)(nil)
 
 func (cr *callResponse) EncodeMsgpack(enc *msgpack.Encoder) error {
