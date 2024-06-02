@@ -89,6 +89,15 @@ func (sig PluginSignature) Validate() error {
 	if sig.Category == "" {
 		return fmt.Errorf("command must have Category")
 	}
+	if sig.Usage == "" {
+		return fmt.Errorf("command Usage must have value")
+	}
+	if len(sig.SearchTerms) == 0 {
+		return fmt.Errorf("command Search Terms must have value")
+	}
+	if len(sig.InputOutputTypes) == 0 {
+		return fmt.Errorf("command Input-Output types must be specified")
+	}
 
 	return sig.Named.Validate()
 }

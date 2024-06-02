@@ -25,15 +25,17 @@ New creates new Nushell Plugin with given commands.
 
 The cfg may be nil, in that case default configuration will be used.
 */
-func New(cmd []*Command, cfg *Config) (*Plugin, error) {
+func New(cmd []*Command, cfg *Config) (_ *Plugin, err error) {
 	p := &Plugin{
 		cmds: make(map[string]*Command),
 		outs: make(map[int]outputStream),
 		inls: make(map[int]inputStream),
 		runs: commandsInFlight{},
-		in:   cfg.streamIn(os.Stdin),
-		out:  cfg.streamOut(os.Stdout),
 		log:  cfg.logger(),
+	}
+
+	if p.in, p.out, err = cfg.ioStreams(os.Args); err != nil {
+		return nil, fmt.Errorf("opening I/O streams: %w", err)
 	}
 
 	for _, v := range cmd {
@@ -100,7 +102,7 @@ message, the ctx was cancelled or unrecoverable error happened).
 func (p *Plugin) Run(ctx context.Context) error {
 	// send encoding type and Hello
 	p.outputRaw(ctx, []byte(format_mpack))
-	h := hello{Protocol: protocol_name, Version: protocol_version}
+	h := hello{Protocol: protocol_name, Version: protocol_version, Features: features{LocalSocket: true}}
 	if err := p.outputMsg(ctx, &h); err != nil {
 		return fmt.Errorf("sending Hello: %w", err)
 	}
