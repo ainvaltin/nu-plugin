@@ -37,7 +37,7 @@ type evaluatedCall struct {
 type NamedParams map[string]Value
 
 type (
-	Empty struct{}
+	empty struct{}
 
 	listStream struct {
 		ID   int  `msgpack:"id"`
@@ -142,7 +142,7 @@ func decodePipelineDataHeader(dec *msgpack.Decoder) (any, error) {
 			return nil, err
 		}
 		if name == "Empty" {
-			return Empty{}, nil
+			return empty{}, nil
 		}
 		return nil, fmt.Errorf("expected PipelineHeader Empty, got %q", name)
 	case msgpcode.IsFixedMap(c):
@@ -338,7 +338,7 @@ func (pd *pipelineData) EncodeMsgpack(enc *msgpack.Encoder) error {
 			return err
 		}
 		return enc.EncodeValue(reflect.ValueOf(dt))
-	case *Empty:
+	case *empty, empty:
 		return enc.EncodeString("Empty")
 	default:
 		return fmt.Errorf("unsupported type %T in PipelineData", dt)

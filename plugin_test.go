@@ -301,7 +301,7 @@ func Test_Plugin_input(t *testing.T) {
 				Signature: signature,
 				OnRun: func(ctx context.Context, exec *ExecCommand) error {
 					switch vt := exec.Input.(type) {
-					case Empty:
+					case nil:
 					default:
 						t.Errorf("unexpected input type %T", vt)
 					}
@@ -316,7 +316,7 @@ func Test_Plugin_input(t *testing.T) {
 		}
 
 		runEngine(t, p, append(protocolPrelude,
-			msgDef{send: &call{ID: 1, Call: run{Name: "inc", Input: Empty{}}}},
+			msgDef{send: &call{ID: 1, Call: run{Name: "inc", Input: nil}}},
 		))
 	})
 
@@ -384,7 +384,7 @@ func Test_Plugin_input(t *testing.T) {
 			msgDef{recv: ack{ID: 7}},
 			msgDef{send: &end{ID: 7}},
 			msgDef{recv: drop{ID: 7}},
-			msgDef{recv: callResponse{ID: 1, Response: pipelineData{Empty{}}}},
+			msgDef{recv: callResponse{ID: 1, Response: pipelineData{empty{}}}},
 		))
 	})
 }

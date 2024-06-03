@@ -15,10 +15,10 @@ func Test_Call_DeEncode_happy(t *testing.T) {
 	// and see did we get back (the same) struct
 	testCases := []call{
 		{ID: 1, Call: signature{}},
-		{ID: 0, Call: run{Name: "inc", Input: Empty{}, Call: evaluatedCall{Head: Span{Start: 40400, End: 40403}, Positional: []Value{}, Named: NamedParams{}}}},
+		{ID: 0, Call: run{Name: "inc", Input: empty{}, Call: evaluatedCall{Head: Span{Start: 40400, End: 40403}, Positional: []Value{}, Named: NamedParams{}}}},
 		{ID: 0, Call: run{Name: "inc", Input: Value{Value: int64(2), Span: Span{Start: 9090, End: 9093}}, Call: evaluatedCall{Head: Span{Start: 40400, End: 40403}, Positional: []Value{}, Named: NamedParams{}}}},
 		{ID: 0, Call: run{Name: "inc", Input: listStream{ID: 2}, Call: evaluatedCall{Head: Span{Start: 40400, End: 40403}, Positional: []Value{}, Named: NamedParams{}}}},
-		{ID: 2, Call: run{Name: "inc", Input: Empty{}, Call: evaluatedCall{Head: Span{Start: 40400, End: 40403}, Positional: []Value{{Value: "0.1.2", Span: Span{Start: 40407, End: 40415}}}, Named: NamedParams{}}}},
+		{ID: 2, Call: run{Name: "inc", Input: empty{}, Call: evaluatedCall{Head: Span{Start: 40400, End: 40403}, Positional: []Value{{Value: "0.1.2", Span: Span{Start: 40407, End: 40415}}}, Named: NamedParams{}}}},
 		// named params encoding differs when sent to plugin (compared to when plugin sends it's signature)... should implement as different types!
 		//{ID: 2, Call: run{Name: "inc", Call: evaluatedCall{Head: Span{Start: 40400, End: 40403}, Positional: []Value{{Value: "0.1.2", Span: Span{Start: 40407, End: 40415}}}, Named: NamedParams{"major": Value{Value: true, Span: Span{Start: 40404, End: 40406}}}}}},
 	}
@@ -86,7 +86,7 @@ func (r *run) EncodeMsgpack(enc *msgpack.Encoder) error {
 	}
 
 	switch iv := r.Input.(type) {
-	case nil, Empty, *Empty:
+	case nil, empty, *empty:
 		return enc.EncodeString("Empty")
 	case Value:
 		if err := encodeMapStart(enc, "Value"); err != nil {

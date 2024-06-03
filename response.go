@@ -21,7 +21,7 @@ type ExecCommand struct {
 	/*
 		Input to the command. Is one of:
 
-		- Empty: no input;
+		- nil: no input;
 		- Value: single value input;
 		- <-chan Value: stream of Values;
 		- io.ReadCloser: raw stream;
@@ -104,7 +104,7 @@ func (ec *ExecCommand) ReturnRawStream(ctx context.Context, opts ...RawStreamOpt
 }
 
 func (ec *ExecCommand) returnNothing(ctx context.Context) error {
-	return ec.p.outputMsg(ctx, &callResponse{ID: ec.callID, Response: &pipelineData{Data: &Empty{}}})
+	return ec.p.outputMsg(ctx, &callResponse{ID: ec.callID, Response: &pipelineData{Data: empty{}}})
 }
 
 func (ec *ExecCommand) returnError(ctx context.Context, callErr error) error {

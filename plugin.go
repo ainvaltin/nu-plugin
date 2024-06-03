@@ -208,8 +208,8 @@ func (p *Plugin) handleRun(ctx context.Context, msg run, callID int) error {
 	}
 
 	switch it := msg.Input.(type) {
-	case Empty, nil:
-		exec.Input = Empty{}
+	case empty, nil:
+		exec.Input = nil
 	case Value:
 		exec.Input = it
 	case listStream:
