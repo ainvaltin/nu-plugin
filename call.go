@@ -40,21 +40,14 @@ type (
 	Empty struct{}
 
 	listStream struct {
-		ID int `msgpack:"id"`
+		ID   int  `msgpack:"id"`
+		Span Span `msgpack:"span"`
 	}
 
-	externalStream struct {
-		Span     Span           `msgpack:"span"`
-		Stdout   *rawStreamInfo `msgpack:"stdout"`
-		Stderr   *rawStreamInfo `msgpack:"stderr"`
-		ExitCode *listStream    `msgpack:"exit_code"`
-		TrimNL   bool           `msgpack:"trim_end_newline"`
-	}
-
-	rawStreamInfo struct {
-		ID        int  `msgpack:"id"`
-		IsBinary  bool `msgpack:"is_binary"`
-		KnownSize int  `msgpack:"known_size"`
+	byteStream struct {
+		ID   int    `msgpack:"id"`
+		Span Span   `msgpack:"span"`
+		Type string `msgpack:"type"`
 	}
 
 	// A successful result with a Nu Value or stream. The body is a PipelineDataHeader.
@@ -170,10 +163,10 @@ func decodePipelineDataHeader(dec *msgpack.Decoder) (any, error) {
 				return nil, fmt.Errorf("decoding ListStream: %w", err)
 			}
 			return v, nil
-		case "ExternalStream":
-			v := externalStream{}
+		case "ByteStream":
+			v := byteStream{}
 			if err := dec.DecodeValue(reflect.ValueOf(&v)); err != nil {
-				return nil, fmt.Errorf("decoding ExternalStream: %w", err)
+				return nil, fmt.Errorf("decoding ByteStream: %w", err)
 			}
 			return v, nil
 		default:
@@ -336,9 +329,12 @@ func (pd *pipelineData) EncodeMsgpack(enc *msgpack.Encoder) error {
 		}
 		return dt.EncodeMsgpack(enc)
 	case *listStream:
-		return dt.EncodeMsgpack(enc)
-	case *externalStream:
-		if err := encodeMapStart(enc, "ExternalStream"); err != nil {
+		if err := encodeMapStart(enc, "ListStream"); err != nil {
+			return err
+		}
+		return enc.EncodeValue(reflect.ValueOf(dt))
+	case *byteStream:
+		if err := encodeMapStart(enc, "ByteStream"); err != nil {
 			return err
 		}
 		return enc.EncodeValue(reflect.ValueOf(dt))
@@ -347,16 +343,4 @@ func (pd *pipelineData) EncodeMsgpack(enc *msgpack.Encoder) error {
 	default:
 		return fmt.Errorf("unsupported type %T in PipelineData", dt)
 	}
-}
-
-var _ msgpack.CustomEncoder = (*listStream)(nil)
-
-func (ls *listStream) EncodeMsgpack(enc *msgpack.Encoder) error {
-	if err := encodeMapStart(enc, "ListStream"); err != nil {
-		return err
-	}
-	if err := encodeMapStart(enc, "id"); err != nil {
-		return err
-	}
-	return enc.EncodeInt(int64(ls.ID))
 }

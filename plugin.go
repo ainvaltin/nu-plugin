@@ -223,9 +223,8 @@ func (p *Plugin) handleRun(ctx context.Context, msg run, callID int) error {
 		p.inls[it.ID] = ls
 		p.iom.Unlock()
 		exec.Input = ls.InputStream()
-	case externalStream:
-		p.log.DebugContext(ctx, fmt.Sprintf("input stdout: %#v", it.Stdout))
-		ls := newInputStreamRaw(it.Stdout.ID)
+	case byteStream:
+		ls := newInputStreamRaw(it.ID)
 		ls.onAck = func(ID int) {
 			if err := p.outputMsg(ctx, ack{ID: ID}); err != nil {
 				p.log.ErrorContext(ctx, "sending Ack", attrError(err), attrStreamID(ID))

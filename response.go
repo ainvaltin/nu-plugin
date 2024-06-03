@@ -137,8 +137,9 @@ type (
 	}
 
 	rawStreamCfg struct {
-		bufSize   uint
-		knownSize uint
+		bufSize  uint
+		dataType string // the expected type of the stream
+		//span     Span
 	}
 	rawStreamOpt struct{ fn func(*rawStreamCfg) }
 )
@@ -155,11 +156,19 @@ func BufferSize(size uint) RawStreamOption {
 }
 
 /*
-KnownSize can be used to send stream size to the consumer when the output
-data size is known beforehand.
+BinaryStream indicates that the stream contains binary data of unknown encoding,
+and should be treated as a binary value.
 */
-func KnownSize(size uint) RawStreamOption {
-	return rawStreamOpt{fn: func(rc *rawStreamCfg) { rc.knownSize = size }}
+func BinaryStream() RawStreamOption {
+	return rawStreamOpt{fn: func(rc *rawStreamCfg) { rc.dataType = "Binary" }}
+}
+
+/*
+StringStream indicates that the stream contains text data that is valid UTF-8,
+and should be treated as a string value.
+*/
+func StringStream() RawStreamOption {
+	return rawStreamOpt{fn: func(rc *rawStreamCfg) { rc.dataType = "String" }}
 }
 
 type commandsInFlight struct {

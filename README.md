@@ -12,7 +12,7 @@ See [example project](https://github.com/ainvaltin/nu_plugin_plist) which implem
 commands to convert to/from plist and encode/decode base85.
 
 Nushell [protocol](https://www.nushell.sh/contributor-book/plugin_protocol_reference.html)
-`0.93.0`. Only stdio mode with message pack encoding is supported.
+`0.94.0`. Only message pack encoding is supported.
 
 ### Unsupported messages
 - EngineCall

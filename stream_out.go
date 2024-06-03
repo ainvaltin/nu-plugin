@@ -11,7 +11,7 @@ func newOutputListRaw(id int, opts ...RawStreamOption) *rawStreamOut {
 	out := &rawStreamOut{
 		id:   id,
 		sent: make(chan struct{}, 1),
-		cfg:  rawStreamCfg{bufSize: 1024},
+		cfg:  rawStreamCfg{bufSize: 1024, dataType: "Unknown"},
 	}
 	out.rdr, out.data = io.Pipe()
 
@@ -40,7 +40,7 @@ func (rc *rawStreamOut) setOnDone(onDone func(id int)) {
 func (rc *rawStreamOut) streamID() int { return rc.id }
 
 func (rc *rawStreamOut) pipelineDataHdr() any {
-	return &externalStream{Stdout: &rawStreamInfo{ID: rc.id, IsBinary: true, KnownSize: int(rc.cfg.knownSize)}}
+	return &byteStream{ID: rc.id, Type: rc.cfg.dataType}
 }
 
 func (rc *rawStreamOut) read() ([]byte, error) {

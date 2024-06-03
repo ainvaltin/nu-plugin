@@ -277,7 +277,7 @@ func Test_Plugin_response(t *testing.T) {
 
 		runEngine(t, p, append(protocolPrelude,
 			msgDef{send: &call{ID: 1, Call: run{Name: "inc"}}},
-			msgDef{recv: callResponse{ID: 1, Response: pipelineData{externalStream{Stdout: &rawStreamInfo{ID: 1, IsBinary: true}}}}},
+			msgDef{recv: callResponse{ID: 1, Response: pipelineData{byteStream{ID: 1, Type: "Unknown"}}}},
 			msgDef{recv: data{ID: 1, Data: []byte("firstsecond")}},
 			msgDef{send: &ack{ID: 1}},
 			msgDef{recv: end{ID: 1}},
@@ -516,6 +516,6 @@ var protocolPrelude = []msgDef{
 	{recv: int8(0x61)},
 	{recv: int8(0x63)},
 	{recv: int8(0x6b)},
-	{recv: hello{Protocol: "nu-plugin", Version: "0.93.0", Features: features{LocalSocket: true}}},
+	{recv: hello{Protocol: protocol_name, Version: protocol_version, Features: features{LocalSocket: true}}},
 	{send: &hello{Protocol: "nu-plugin", Version: "0.92.2"}},
 }
