@@ -8,6 +8,12 @@ import (
 	"sync/atomic"
 )
 
+/*
+ExecCommand is passed as argument to the plugin command's OnRun handler.
+
+It allows to make engine calls, access command's input (see Input, Named
+and Positional fields) and send response (see Return* methods).
+*/
 type ExecCommand struct {
 	Name string
 
@@ -47,9 +53,9 @@ func (ec *ExecCommand) ReturnValue(ctx context.Context, v Value) error {
 }
 
 /*
-ReturnListStream should be used when command wants to return multiple nu.Values.
+ReturnListStream should be used when command returns multiple nu.Values.
 
-To signal the end of values chan must be closed.
+To signal the end of data chan must be closed.
 */
 func (ec *ExecCommand) ReturnListStream(ctx context.Context) (chan<- Value, error) {
 	out := newOutputListValue(int(ec.p.idGen.Add(1)))
@@ -74,7 +80,7 @@ func (ec *ExecCommand) ReturnListStream(ctx context.Context) (chan<- Value, erro
 }
 
 /*
-ReturnRawStream should be used when command wants to return raw stream.
+ReturnRawStream should be used when command returns raw stream.
 
 To signal the end of data Writer must be closed.
 
@@ -157,7 +163,7 @@ func BufferSize(size uint) RawStreamOption {
 
 /*
 BinaryStream indicates that the stream contains binary data of unknown encoding,
-and should be treated as a binary value.
+and should be treated as a binary value. See also [StringStream].
 */
 func BinaryStream() RawStreamOption {
 	return rawStreamOpt{fn: func(rc *rawStreamCfg) { rc.dataType = "Binary" }}
@@ -165,7 +171,7 @@ func BinaryStream() RawStreamOption {
 
 /*
 StringStream indicates that the stream contains text data that is valid UTF-8,
-and should be treated as a string value.
+and should be treated as a string value. See also [BinaryStream].
 */
 func StringStream() RawStreamOption {
 	return rawStreamOpt{fn: func(rc *rawStreamCfg) { rc.dataType = "String" }}

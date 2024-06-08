@@ -135,13 +135,6 @@ func (cr *callResponse) DecodeMsgpack(dec *msgpack.Decoder) (err error) {
 	return nil
 }
 
-var _ msgpack.CustomDecoder = (*pipelineData)(nil)
-
-func (pd *pipelineData) DecodeMsgpack(dec *msgpack.Decoder) (err error) {
-	pd.Data, err = decodePipelineDataHeader(dec)
-	return err
-}
-
 var _ msgpack.CustomEncoder = (*NamedParams)(nil)
 
 func (np *NamedParams) EncodeMsgpack(enc *msgpack.Encoder) error {

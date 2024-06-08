@@ -22,19 +22,19 @@ type (
 		Input any           `msgpack:"input,omitempty"`
 	}
 
+	evaluatedCall struct {
+		Head       Span        `msgpack:"head"`
+		Positional []Value     `msgpack:"positional"`
+		Named      NamedParams `msgpack:"named"`
+	}
+
+	NamedParams map[string]Value
+
 	callResponse struct {
 		ID       int
 		Response any
 	}
 )
-
-type evaluatedCall struct {
-	Head       Span        `msgpack:"head"`
-	Positional []Value     `msgpack:"positional"`
-	Named      NamedParams `msgpack:"named"`
-}
-
-type NamedParams map[string]Value
 
 type (
 	empty struct{}
@@ -343,4 +343,11 @@ func (pd *pipelineData) EncodeMsgpack(enc *msgpack.Encoder) error {
 	default:
 		return fmt.Errorf("unsupported type %T in PipelineData", dt)
 	}
+}
+
+var _ msgpack.CustomDecoder = (*pipelineData)(nil)
+
+func (pd *pipelineData) DecodeMsgpack(dec *msgpack.Decoder) (err error) {
+	pd.Data, err = decodePipelineDataHeader(dec)
+	return err
 }

@@ -1,3 +1,5 @@
+[![Go Reference](https://pkg.go.dev/badge/github.com/ainvaltin/nu-plugin.svg)](https://pkg.go.dev/github.com/ainvaltin/nu-plugin)
+
 # Nushell Plugin
 
 The aim of this package is to make it simple to create 
@@ -14,9 +16,13 @@ commands to convert to/from plist and encode/decode base85.
 Nushell [protocol](https://www.nushell.sh/contributor-book/plugin_protocol_reference.html)
 `0.94.0`. Only message pack encoding is supported.
 
-### Unsupported messages
-- EngineCall
-- Option
+### Unsupported Engine Calls
+- GetConfig
+- GetEnvVars
+- EvalClosure
+
+### Unsupported Plugin Calls
+- CustomValueOp
 
 ### Unsupported Values
 - Range

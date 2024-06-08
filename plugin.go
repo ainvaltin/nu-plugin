@@ -30,6 +30,7 @@ func New(cmd []*Command, cfg *Config) (_ *Plugin, err error) {
 		cmds: make(map[string]*Command),
 		outs: make(map[int]outputStream),
 		inls: make(map[int]inputStream),
+		engc: make(map[int]chan any),
 		runs: commandsInFlight{},
 		log:  cfg.logger(),
 	}
@@ -70,7 +71,8 @@ type Plugin struct {
 	iom   sync.Mutex // to sync in and out maps
 	outs  map[int]outputStream
 	inls  map[int]inputStream
-	idGen atomic.Uint32 // id generator
+	engc  map[int]chan any // in-flight engine calls
+	idGen atomic.Uint32    // id generator
 
 	in io.Reader
 	// output might be accessed by multiple goroutines so guard it with mutex
@@ -165,6 +167,8 @@ func (p *Plugin) handleMessage(ctx context.Context, msg any) error {
 		return p.handleEnd(ctx, m.ID)
 	case drop:
 		return p.handleDrop(ctx, m.ID)
+	case engineCallResponse:
+		return p.handleEngineCallResponse(ctx, m)
 	case hello:
 		return nil
 	default:
@@ -323,6 +327,39 @@ func (p *Plugin) registerOutput(ctx context.Context, callID int, stream outputSt
 		}
 	}()
 
+	return nil
+}
+
+func (p *Plugin) engineCall(ctx context.Context, callID int, query any) (<-chan any, error) {
+	ecID := int(p.idGen.Add(1))
+	ch := make(chan any, 1)
+	p.iom.Lock()
+	p.engc[ecID] = ch
+	p.iom.Unlock()
+
+	type eCall struct {
+		Call *engineCall `msgpack:"EngineCall"`
+	}
+	if err := p.outputMsg(ctx, &eCall{&engineCall{Context: callID, ID: ecID, Call: query}}); err != nil {
+		return nil, fmt.Errorf("sending engine call: %w", err)
+	}
+	return ch, nil
+}
+
+func (p *Plugin) handleEngineCallResponse(_ context.Context, ecr engineCallResponse) error {
+	p.iom.Lock()
+	c, ok := p.engc[ecr.ID]
+	delete(p.engc, ecr.ID)
+	p.iom.Unlock()
+	if !ok {
+		return fmt.Errorf("received unregistered Engine Call Response with ID %d", ecr.ID)
+	}
+	switch tv := ecr.Response.(type) {
+	case pipelineData:
+		c <- tv.Data
+	default:
+		c <- ecr.Response
+	}
 	return nil
 }
 

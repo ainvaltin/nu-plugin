@@ -132,6 +132,9 @@ func handleMsgDecode(dec *msgpack.Decoder, name string) (_ interface{}, err erro
 		m := drop{}
 		m.ID, err = dec.DecodeInt()
 		return m, err
+	case "EngineCallResponse":
+		m := engineCallResponse{}
+		return m, m.DecodeMsgpack(dec)
 	case "Hello":
 		m := hello{}
 		return m, dec.DecodeValue(reflect.ValueOf(&m))
