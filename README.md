@@ -18,8 +18,6 @@ Nushell [protocol](https://www.nushell.sh/contributor-book/plugin_protocol_refer
 
 ### Unsupported Engine Calls
 - GetConfig
-- GetEnvVars
-- EvalClosure
 
 ### Unsupported Plugin Calls
 - CustomValueOp
@@ -28,6 +26,5 @@ Nushell [protocol](https://www.nushell.sh/contributor-book/plugin_protocol_refer
 - Range
 - Glob
 - Block
-- Closure
 - CellPath
 - Custom

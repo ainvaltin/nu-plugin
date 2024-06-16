@@ -12,6 +12,7 @@ import (
 func Test_Value_DeEncode(t *testing.T) {
 	// encode Value as message pack, then decode the binary
 	// and see did we get back (the same) expected Value
+	// happy cases, ie we expect no en/decode errors
 	testCases := []struct {
 		in  Value // value encoded
 		out Value // value we expect to get by decoding encoded "in"
@@ -43,6 +44,8 @@ func Test_Value_DeEncode(t *testing.T) {
 		{in: Value{Value: Record{"foo": Value{Value: "bar"}, "int": Value{Value: 12}}}, out: Value{Value: Record{"foo": Value{Value: "bar"}, "int": Value{Value: int64(12)}}}},
 		{in: Value{Value: []Value{{Value: "first"}, {Value: 13}}}, out: Value{Value: []Value{{Value: "first"}, {Value: int64(13)}}}},
 		{in: Value{Value: fmt.Errorf("oops")}, out: Value{Value: LabeledError{Msg: "oops"}}},
+		{in: Value{Value: Closure{BlockID: 8}}, out: Value{Value: Closure{BlockID: 8}}},
+		{in: Value{Value: Closure{BlockID: 8, Captures: []byte{144}}}, out: Value{Value: Closure{BlockID: 8, Captures: []byte{144}}}},
 	}
 
 	for x, tc := range testCases {
@@ -57,8 +60,20 @@ func Test_Value_DeEncode(t *testing.T) {
 			continue
 		}
 
-		if diff := cmp.Diff(tc.out, dv); diff != "" {
-			t.Errorf("[%d]%T type mismatch (-want +got):\n%s", x, tc.in.Value, diff)
+		if diff := cmp.Diff(dv, tc.out); diff != "" {
+			t.Errorf("[%d]%T type mismatch (-input +output):\n%s", x, tc.in.Value, diff)
 		}
 	}
+}
+
+func Test_Value_Encode(t *testing.T) {
+	t.Run("unsupported type", func(t *testing.T) {
+		v := Value{Value: 10i}
+		_, err := msgpack.Marshal(&v)
+		expectErrorMsg(t, err, `unsupported Value type complex128`)
+
+		v = Value{Value: struct{ Foo string }{"anon"}}
+		_, err = msgpack.Marshal(&v)
+		expectErrorMsg(t, err, `unsupported Value type struct { Foo string }`)
+	})
 }

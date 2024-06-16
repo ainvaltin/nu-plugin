@@ -93,7 +93,11 @@ type outputStream interface {
 	drop()
 	streamID() int
 	pipelineDataHdr() any
-	close() error
+	closeCtx
+}
+
+type closeCtx interface {
+	close(context.Context) error
 }
 
 /*
@@ -211,35 +215,9 @@ func (p *Plugin) handleRun(ctx context.Context, msg run, callID int) error {
 		Named:      msg.Call.Named,
 	}
 
-	switch it := msg.Input.(type) {
-	case empty, nil:
-		exec.Input = nil
-	case Value:
-		exec.Input = it
-	case listStream:
-		ls := newInputStreamList(it.ID)
-		ls.onAck = func(ID int) {
-			if err := p.outputMsg(ctx, ack{ID: ID}); err != nil {
-				p.log.ErrorContext(ctx, "sending Ack", attrError(err), attrStreamID(ID))
-			}
-		}
-		p.iom.Lock()
-		p.inls[it.ID] = ls
-		p.iom.Unlock()
-		exec.Input = ls.InputStream()
-	case byteStream:
-		ls := newInputStreamRaw(it.ID)
-		ls.onAck = func(ID int) {
-			if err := p.outputMsg(ctx, ack{ID: ID}); err != nil {
-				p.log.ErrorContext(ctx, "sending Ack", attrError(err), attrStreamID(ID))
-			}
-		}
-		p.iom.Lock()
-		p.inls[ls.id] = ls
-		p.iom.Unlock()
-		exec.Input = ls.rdr
-	default:
-		return fmt.Errorf("running %q with unsupported input type: %T", msg.Name, it)
+	var err error
+	if exec.Input, err = p.getInput(msg.Input); err != nil {
+		return err
 	}
 
 	ctx, exec.cancel = context.WithCancelCause(ctx)
@@ -251,7 +229,7 @@ func (p *Plugin) handleRun(ctx context.Context, msg run, callID int) error {
 				p.log.ErrorContext(ctx, "sending error response", attrError(err), attrCallID(callID))
 			}
 			// the stream might still be open so attempt to close it
-			exec.closeOutputStream()
+			exec.closeOutputStream(ctx)
 			return
 		}
 
@@ -263,6 +241,45 @@ func (p *Plugin) handleRun(ctx context.Context, msg run, callID int) error {
 	}()
 
 	return nil
+}
+
+/*
+given instance of internal type returs instance of type the plugin author uses to
+consume the input data.
+*/
+func (p *Plugin) getInput(input any) (any, error) {
+	switch it := input.(type) {
+	case empty, nil:
+		return nil, nil
+	case Value:
+		return it, nil
+	case listStream:
+		ls := newInputStreamList(it.ID)
+		ls.onAck = func(ctx context.Context, ID int) {
+			if err := p.outputMsg(ctx, ack{ID: ID}); err != nil {
+				p.log.ErrorContext(ctx, "sending Ack", attrError(err), attrStreamID(ID))
+			}
+		}
+		p.iom.Lock()
+		p.inls[it.ID] = ls
+		p.iom.Unlock()
+		return ls.InputStream(), nil
+	case byteStream:
+		ls := newInputStreamRaw(it.ID)
+		ls.onAck = func(ctx context.Context, ID int) {
+			if err := p.outputMsg(ctx, ack{ID: ID}); err != nil {
+				p.log.ErrorContext(ctx, "sending Ack", attrError(err), attrStreamID(ID))
+			}
+		}
+		p.iom.Lock()
+		p.inls[ls.id] = ls
+		p.iom.Unlock()
+		return ls.rdr, nil
+	case LabeledError:
+		return nil, &it
+	default:
+		return nil, fmt.Errorf("unsupported input type: %T", it)
+	}
 }
 
 func (p *Plugin) handleAck(_ context.Context, id int) error {
@@ -312,22 +329,16 @@ func (p *Plugin) handleDrop(_ context.Context, id int) error {
 	return nil
 }
 
-func (p *Plugin) registerOutput(ctx context.Context, callID int, stream outputStream) error {
+func (p *Plugin) registerOutputStream(ctx context.Context, stream outputStream) {
 	p.iom.Lock()
 	p.outs[stream.streamID()] = stream
 	p.iom.Unlock()
-
-	if err := p.outputMsg(ctx, &callResponse{ID: callID, Response: &pipelineData{stream.pipelineDataHdr()}}); err != nil {
-		return fmt.Errorf("sending CallResponse{%d} PipelineData Stream{%d}: %w", callID, stream.streamID(), err)
-	}
 
 	go func() {
 		if err := stream.run(ctx); err != nil {
 			p.log.ErrorContext(ctx, "output stream run exit", attrError(err), attrStreamID(stream.streamID()))
 		}
 	}()
-
-	return nil
 }
 
 func (p *Plugin) engineCall(ctx context.Context, callID int, query any) (<-chan any, error) {

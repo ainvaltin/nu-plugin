@@ -23,7 +23,7 @@ func Test_rawStreamIn(t *testing.T) {
 
 	t.Run("data sent without Ack", func(t *testing.T) {
 		rs := newInputStreamRaw(1)
-		rs.onAck = func(ID int) {}
+		rs.onAck = func(ctx context.Context, id int) {}
 		if err := rs.received(context.Background(), []byte{1}); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -34,7 +34,7 @@ func Test_rawStreamIn(t *testing.T) {
 
 	t.Run("attempt to write after end of data signal", func(t *testing.T) {
 		rs := newInputStreamRaw(1)
-		rs.onAck = func(ID int) { t.Error("unexpected call") }
+		rs.onAck = func(ctx context.Context, id int) { t.Error("unexpected call") }
 		rs.endOfData()
 		_, err := rs.data.Write([]byte{8})
 		expectErrorMsg(t, err, `io: read/write on closed pipe`)
@@ -43,7 +43,7 @@ func Test_rawStreamIn(t *testing.T) {
 	t.Run("producer and consumer", func(t *testing.T) {
 		acked := make(chan struct{})
 		rs := newInputStreamRaw(20)
-		rs.onAck = func(ID int) { acked <- struct{}{} }
+		rs.onAck = func(ctx context.Context, id int) { acked <- struct{}{} }
 
 		var sumW uint64
 		go func() {
@@ -89,7 +89,7 @@ func Test_listStreamIn(t *testing.T) {
 
 	t.Run("data sent without Ack", func(t *testing.T) {
 		ls := newInputStreamList(1)
-		ls.onAck = func(ID int) {}
+		ls.onAck = func(ctx context.Context, id int) {}
 		if err := ls.received(context.Background(), Value{Value: 2}); err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
@@ -102,9 +102,9 @@ func Test_listStreamIn(t *testing.T) {
 		// normal use case, check that onAck event is triggered when data is consumed
 		onAckCalled := make(chan struct{})
 		ls := newInputStreamList(1)
-		ls.onAck = func(ID int) {
-			if ID != 1 {
-				t.Errorf("expected Ack callback for stream with ID 1, got %d", ID)
+		ls.onAck = func(ctx context.Context, id int) {
+			if id != 1 {
+				t.Errorf("expected Ack callback for stream with ID 1, got %d", id)
 			}
 			close(onAckCalled)
 		}
@@ -131,7 +131,7 @@ func Test_listStreamIn(t *testing.T) {
 		// the last item (even tho EOD should be singnalled only after Ack?)
 		onAckCalled := make(chan struct{})
 		ls := newInputStreamList(1)
-		ls.onAck = func(ID int) {
+		ls.onAck = func(ctx context.Context, id int) {
 			close(onAckCalled)
 		}
 
@@ -161,7 +161,7 @@ func Test_listStreamIn(t *testing.T) {
 		acked := make(chan struct{})
 
 		ls := newInputStreamList(20)
-		ls.onAck = func(ID int) { acked <- struct{}{} }
+		ls.onAck = func(ctx context.Context, id int) { acked <- struct{}{} }
 		wg := sync.WaitGroup{}
 		wg.Add(2)
 

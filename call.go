@@ -177,6 +177,30 @@ func decodePipelineDataHeader(dec *msgpack.Decoder) (any, error) {
 	}
 }
 
+func encodePipelineDataHeader(enc *msgpack.Encoder, data any) error {
+	switch dt := data.(type) {
+	case *Value:
+		if err := encodeMapStart(enc, "Value"); err != nil {
+			return err
+		}
+		return dt.EncodeMsgpack(enc)
+	case *listStream:
+		if err := encodeMapStart(enc, "ListStream"); err != nil {
+			return err
+		}
+		return enc.EncodeValue(reflect.ValueOf(dt))
+	case *byteStream:
+		if err := encodeMapStart(enc, "ByteStream"); err != nil {
+			return err
+		}
+		return enc.EncodeValue(reflect.ValueOf(dt))
+	case *empty, empty:
+		return enc.EncodeString("Empty")
+	default:
+		return fmt.Errorf("unsupported PipelineDataHeader type %T", dt)
+	}
+}
+
 var _ msgpack.CustomDecoder = (*NamedParams)(nil)
 
 func (np *NamedParams) DecodeMsgpack(dec *msgpack.Decoder) error {
@@ -322,27 +346,7 @@ func (pd *pipelineData) EncodeMsgpack(enc *msgpack.Encoder) error {
 		return err
 	}
 
-	switch dt := pd.Data.(type) {
-	case *Value:
-		if err := encodeMapStart(enc, "Value"); err != nil {
-			return err
-		}
-		return dt.EncodeMsgpack(enc)
-	case *listStream:
-		if err := encodeMapStart(enc, "ListStream"); err != nil {
-			return err
-		}
-		return enc.EncodeValue(reflect.ValueOf(dt))
-	case *byteStream:
-		if err := encodeMapStart(enc, "ByteStream"); err != nil {
-			return err
-		}
-		return enc.EncodeValue(reflect.ValueOf(dt))
-	case *empty, empty:
-		return enc.EncodeString("Empty")
-	default:
-		return fmt.Errorf("unsupported type %T in PipelineData", dt)
-	}
+	return encodePipelineDataHeader(enc, pd.Data)
 }
 
 var _ msgpack.CustomDecoder = (*pipelineData)(nil)

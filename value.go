@@ -32,6 +32,18 @@ type Filesize int64
 
 type Record map[string]Value
 
+/*
+Closure [Value] is a reference to a parsed block of Nushell code, with variables
+captured from scope.
+
+The plugin should not try to inspect the contents of the closure. It is recommended
+that this is only used as an argument to the [ExecCommand.EvalClosure] engine call.
+*/
+type Closure struct {
+	BlockID  uint               `msgpack:"block_id"`
+	Captures msgpack.RawMessage `msgpack:"captures"`
+}
+
 var _ msgpack.CustomEncoder = (*Value)(nil)
 
 func (v *Value) EncodeMsgpack(enc *msgpack.Encoder) error {
@@ -148,6 +160,11 @@ func (v *Value) EncodeMsgpack(enc *msgpack.Encoder) error {
 		}
 	case []Value:
 		err = encodeValueList(enc, tv)
+	case Closure:
+		if err := startValue(enc, "Closure"); err != nil {
+			return err
+		}
+		err = enc.EncodeValue(reflect.ValueOf(&tv))
 	case error:
 		err = encodeLabeledError(enc, AsLabeledError(tv))
 	case LabeledError:
@@ -163,17 +180,26 @@ func (v *Value) EncodeMsgpack(enc *msgpack.Encoder) error {
 		return fmt.Errorf("unsupported Value type %T", tv)
 	}
 	if err != nil {
-		return fmt.Errorf("encoding %T Value", v)
+		return fmt.Errorf("encoding %T Value", v.Value)
 	}
 
 	if err := enc.EncodeString("span"); err != nil {
 		return err
 	}
-	err = enc.EncodeValue(reflect.ValueOf(&v.Span))
+	if err := enc.EncodeValue(reflect.ValueOf(&v.Span)); err != nil {
+		return fmt.Errorf("encoding span: %w", err)
+	}
 
-	return err
+	return nil
 }
 
+/*
+startValue outputs key "typeName" with value of map with two items of
+which first key "val" is created too. So the caller has to output value
+of "val" and one more key-value pair:
+
+	"typeName": { "val": | }
+*/
 func startValue(enc *msgpack.Encoder, typeName string) error {
 	if err := enc.EncodeString(typeName); err != nil {
 		return err
@@ -273,6 +299,10 @@ func (v *Value) decodeValue(dec *msgpack.Decoder, typeName string) error {
 				rec := Record{}
 				err = dec.DecodeValue(reflect.ValueOf(&rec))
 				v.Value = rec
+			case "Closure":
+				c := Closure{}
+				err = dec.DecodeValue(reflect.ValueOf(&c))
+				v.Value = c
 			default:
 				return fmt.Errorf("unsupported Value type %q", typeName)
 			}

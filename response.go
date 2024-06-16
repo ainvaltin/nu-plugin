@@ -58,7 +58,9 @@ ReturnListStream should be used when command returns multiple nu.Values.
 To signal the end of data chan must be closed.
 */
 func (ec *ExecCommand) ReturnListStream(ctx context.Context) (chan<- Value, error) {
-	out := newOutputListValue(int(ec.p.idGen.Add(1)))
+	out := newOutputListValue(ec.p)
+	out.onDrop = func() { ec.cancel(ErrDropStream) }
+
 	if !ec.output.CompareAndSwap(nil, out) {
 		if es, ok := ec.output.Load().(*listStreamOut); ok {
 			return es.data, nil
@@ -66,13 +68,7 @@ func (ec *ExecCommand) ReturnListStream(ctx context.Context) (chan<- Value, erro
 		return nil, fmt.Errorf("response has been already sent")
 	}
 
-	out.onSend = func(id int, v Value) error {
-		return ec.p.outputMsg(ctx, &data{ID: id, Data: v})
-	}
-	out.setOnDone(func(id int) { ec.p.outputMsg(ctx, end{ID: id}) })
-	out.onDrop = func() { ec.cancel(ErrDropStream) }
-
-	if err := ec.p.registerOutput(ctx, ec.callID, out); err != nil {
+	if err := ec.startResponseStream(ctx, out); err != nil {
 		return nil, err
 	}
 
@@ -88,7 +84,9 @@ Cancelling the context (ctx) will also "stop" the output stream, ie it
 signals that the plugin is about to quit and all work has to be abandoned.
 */
 func (ec *ExecCommand) ReturnRawStream(ctx context.Context, opts ...RawStreamOption) (io.WriteCloser, error) {
-	out := newOutputListRaw(int(ec.p.idGen.Add(1)), opts...)
+	out := newOutputListRaw(ec.p, opts...)
+	out.onDrop = func() { ec.cancel(ErrDropStream) }
+
 	if !ec.output.CompareAndSwap(nil, out) {
 		if es, ok := ec.output.Load().(*rawStreamOut); ok {
 			return es.data, nil
@@ -96,13 +94,7 @@ func (ec *ExecCommand) ReturnRawStream(ctx context.Context, opts ...RawStreamOpt
 		return nil, fmt.Errorf("response has been already sent")
 	}
 
-	out.onSend = func(ID int, b []byte) error {
-		return ec.p.outputMsg(ctx, &data{ID: ID, Data: b})
-	}
-	out.setOnDone(func(id int) { ec.p.outputMsg(ctx, end{ID: id}) })
-	out.onDrop = func() { ec.cancel(ErrDropStream) }
-
-	if err := ec.p.registerOutput(ctx, ec.callID, out); err != nil {
+	if err := ec.startResponseStream(ctx, out); err != nil {
 		return nil, err
 	}
 
@@ -130,10 +122,18 @@ func (ec *ExecCommand) returnError(ctx context.Context, callErr error) error {
 	}
 }
 
-func (ec *ExecCommand) closeOutputStream() {
+func (ec *ExecCommand) startResponseStream(ctx context.Context, out outputStream) error {
+	ec.p.registerOutputStream(ctx, out)
+	if err := ec.p.outputMsg(ctx, &callResponse{ID: ec.callID, Response: &pipelineData{out.pipelineDataHdr()}}); err != nil {
+		return fmt.Errorf("sending CallResponse{%d} PipelineData Stream{%d}: %w", ec.callID, out.streamID(), err)
+	}
+	return nil
+}
+
+func (ec *ExecCommand) closeOutputStream(ctx context.Context) {
 	out := ec.output.Load()
-	if closer, ok := out.(interface{ close() error }); ok {
-		closer.close()
+	if closer, ok := out.(closeCtx); ok {
+		closer.close(ctx)
 	}
 }
 

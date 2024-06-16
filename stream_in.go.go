@@ -19,7 +19,7 @@ func newInputStreamRaw(id int) *rawStreamIn {
 type rawStreamIn struct {
 	id       int
 	inFlight chan struct{}
-	onAck    func(ID int) // plugin has consumed the latest Data msg
+	onAck    func(ctx context.Context, id int) // plugin has consumed the latest Data msg
 	data     io.WriteCloser
 	rdr      io.ReadCloser
 }
@@ -38,7 +38,7 @@ func (lsi *rawStreamIn) received(ctx context.Context, v any) error {
 	go func() {
 		lsi.data.Write(in)
 		<-lsi.inFlight
-		lsi.onAck(lsi.id)
+		lsi.onAck(ctx, lsi.id)
 	}()
 
 	return nil
@@ -73,7 +73,7 @@ type listStreamIn struct {
 
 	// this callback is triggered to signal that the last item received
 	// has been processed, consumer is ready for the next one
-	onAck func(ID int)
+	onAck func(ctx context.Context, id int)
 }
 
 // return (readonly) chan to the command's Run handler
@@ -98,7 +98,7 @@ func (lsi *listStreamIn) received(ctx context.Context, v any) error {
 		select {
 		case lsi.data <- in:
 			<-lsi.inFlight
-			lsi.onAck(lsi.id)
+			lsi.onAck(ctx, lsi.id)
 		case <-ctx.Done():
 			return
 		}

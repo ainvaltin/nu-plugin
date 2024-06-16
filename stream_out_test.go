@@ -15,10 +15,10 @@ import (
 func Test_rawStreamOut(t *testing.T) {
 	t.Run("sending data blocks until Ack-ed", func(t *testing.T) {
 		consumer := bytes.NewBuffer(nil)
-		ls := newOutputListRaw(1)
+		ls := initOutputListRaw(1)
 		ls.cfg.bufSize = 5
-		ls.onSend = func(ID int, v []byte) error { _, err := consumer.Write(v); return err }
-		ls.setOnDone(func(id int) {})
+		ls.onSend = func(ctx context.Context, id int, v []byte) error { _, err := consumer.Write(v); return err }
+		ls.setOnDone(func(ctx context.Context, id int) error { return nil })
 
 		runDone := make(chan error)
 		go func() {
@@ -71,11 +71,14 @@ func Test_rawStreamOut(t *testing.T) {
 	})
 
 	t.Run("multiple writes collected and sent", func(t *testing.T) {
-		ls := newOutputListRaw(1)
-		ls.setOnDone(func(id int) {})
+		ls := initOutputListRaw(1)
+		ls.setOnDone(func(ctx context.Context, id int) error { return nil })
 		// we set buf size so big that we do not expect any onSend calls
 		ls.cfg.bufSize = 1024
-		ls.onSend = func(ID int, v []byte) error { t.Errorf("unexpected onSend call with %x", v); return nil }
+		ls.onSend = func(ctx context.Context, id int, v []byte) error {
+			t.Errorf("unexpected onSend call with %x", v)
+			return nil
+		}
 
 		runDone := make(chan error)
 		go func() {
@@ -89,7 +92,7 @@ func Test_rawStreamOut(t *testing.T) {
 		ls.data.Write(bytes.Repeat([]byte{3}, 10))
 		// closing the writer should trigger sending the data
 		consumer := bytes.NewBuffer(nil)
-		ls.onSend = func(ID int, v []byte) error { _, err := consumer.Write(v); return err }
+		ls.onSend = func(ctx context.Context, id int, v []byte) error { _, err := consumer.Write(v); return err }
 		if err := ls.data.Close(); err != nil {
 			t.Errorf("unexpected error closing the writer: %v", err)
 		}
@@ -111,11 +114,11 @@ func Test_rawStreamOut(t *testing.T) {
 	})
 
 	t.Run("not sending anything", func(t *testing.T) {
-		ls := newOutputListRaw(1)
-		ls.onSend = func(ID int, v []byte) error { t.Errorf("unexpected call: %v", v); return nil }
+		ls := initOutputListRaw(1)
+		ls.onSend = func(ctx context.Context, id int, v []byte) error { t.Errorf("unexpected call: %v", v); return nil }
 
 		var onDoneCalled atomic.Bool
-		ls.setOnDone(func(id int) { onDoneCalled.Store(true) })
+		ls.setOnDone(func(ctx context.Context, id int) error { onDoneCalled.Store(true); return nil })
 
 		runDone := make(chan error)
 		go func() {
@@ -142,7 +145,7 @@ func Test_rawStreamOut(t *testing.T) {
 	})
 
 	t.Run("two Ack-s in a row", func(t *testing.T) {
-		ls := newOutputListRaw(77)
+		ls := initOutputListRaw(77)
 		if err := ls.ack(); err != nil {
 			t.Errorf("first Ack should not have returned error but got: %v", err)
 		}
@@ -158,9 +161,10 @@ func Test_rawStreamOut(t *testing.T) {
 
 func Test_listStreamOut(t *testing.T) {
 	t.Run("sending data blocks until Ack-ed", func(t *testing.T) {
-		ls := newOutputListValue(1)
-		ls.onSend = func(ID int, v Value) error { return nil }
-		ls.setOnDone(func(id int) {})
+		ls := newOutputListValue(&Plugin{})
+		ls.onSend = func(ctx context.Context, id int, v Value) error { return nil }
+		<-ls.closer
+		ls.setOnDone(func(ctx context.Context, id int) error { return nil })
 
 		runDone := make(chan error)
 		go func() {
@@ -201,13 +205,17 @@ func Test_listStreamOut(t *testing.T) {
 
 	t.Run("onDone is called", func(t *testing.T) {
 		done := make(chan struct{})
-		ls := newOutputListValue(77)
-		ls.onSend = func(ID int, v Value) error { return nil }
-		ls.setOnDone(func(id int) {
+		p := &Plugin{}
+		p.idGen.Add(76)
+		ls := newOutputListValue(p)
+		ls.onSend = func(ctx context.Context, id int, v Value) error { return nil }
+		<-ls.closer
+		ls.setOnDone(func(ctx context.Context, id int) error {
 			if id != 77 {
 				t.Errorf("expected stream id 77, got %d", id)
 			}
 			close(done)
+			return nil
 		})
 
 		runDone := make(chan error)
@@ -237,9 +245,10 @@ func Test_listStreamOut(t *testing.T) {
 
 	t.Run("ctx cancel stops the loop: waiting input", func(t *testing.T) {
 		runDone := make(chan error)
-		ls := newOutputListValue(77)
-		ls.onSend = func(ID int, v Value) error { return nil }
-		ls.setOnDone(func(id int) { t.Error("shouldn't be called") })
+		ls := newOutputListValue(&Plugin{})
+		ls.onSend = func(ctx context.Context, id int, v Value) error { return nil }
+		<-ls.closer
+		ls.setOnDone(func(ctx context.Context, id int) error { t.Error("shouldn't be called"); return nil })
 
 		ctx, cancel := context.WithCancel(context.Background())
 		go func() {
@@ -260,9 +269,10 @@ func Test_listStreamOut(t *testing.T) {
 
 	t.Run("ctx cancel stops the loop: waiting ack", func(t *testing.T) {
 		runDone := make(chan error)
-		ls := newOutputListValue(77)
-		ls.onSend = func(ID int, v Value) error { return nil }
-		ls.setOnDone(func(id int) { t.Error("shouldn't be called") })
+		ls := newOutputListValue(&Plugin{})
+		ls.onSend = func(ctx context.Context, id int, v Value) error { return nil }
+		<-ls.closer
+		ls.setOnDone(func(ctx context.Context, id int) error { t.Error("shouldn't be called"); return nil })
 
 		ctx, cancel := context.WithCancel(context.Background())
 		go func() {
@@ -283,7 +293,7 @@ func Test_listStreamOut(t *testing.T) {
 	})
 
 	t.Run("two Ack-s in a row", func(t *testing.T) {
-		ls := newOutputListValue(77)
+		ls := newOutputListValue(&Plugin{})
 		if err := ls.ack(); err != nil {
 			t.Errorf("first Ack should not have returned error but got: %v", err)
 		}

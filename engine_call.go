@@ -2,7 +2,9 @@ package nu
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"reflect"
 	"syscall"
 
@@ -138,8 +140,7 @@ func (ec *ExecCommand) GetEnvVar(ctx context.Context, name string) (*Value, erro
 GetEnvVars engine call.
 
 Get all environment variables from the caller's scope.
-* /
-//TODO: unsupported Value type "Closure"
+*/
 func (ec *ExecCommand) GetEnvVars(ctx context.Context) (map[string]Value, error) {
 	ch, err := ec.p.engineCall(ctx, ec.callID, "GetEnvVars")
 	if err != nil {
@@ -158,7 +159,7 @@ func (ec *ExecCommand) GetEnvVars(ctx context.Context) (map[string]Value, error)
 			return nil, fmt.Errorf("unexpected return value of type %T", tv)
 		}
 	}
-} //*/
+}
 
 /*
 GetCurrentDir engine call.
@@ -230,7 +231,7 @@ func (ec *ExecCommand) LeaveForeground(ctx context.Context) error {
 	if v != nil {
 		return fmt.Errorf("unexpected non-empty response: %v", v.Value)
 	}
-	// TODO: if EnterForeground called Setpgid we should call Setpgid(0) here
+	// TODO: if EnterForeground called Setpgid we should call Setpgid(0) here?
 	return nil
 }
 
@@ -268,8 +269,207 @@ func (ec *ExecCommand) engineCallValueReturn(ctx context.Context, arg any) (*Val
 			return nil, nil
 		case Value:
 			return &tv, nil
+		case LabeledError:
+			return nil, &tv
 		default:
 			return nil, fmt.Errorf("unexpected return value of type %T", tv)
 		}
 	}
+}
+
+/*
+EvalClosure engine call.
+
+Pass a [Closure] and arguments to the engine to be evaluated. Returned value follows
+the same rules as Input field of the [ExecCommand] (ie it could be nil, Value or
+stream).
+*/
+func (ec *ExecCommand) EvalClosure(ctx context.Context, closure Value, args ...EvalClosureArgument) (any, error) {
+	if _, ok := closure.Value.(Closure); !ok {
+		return nil, fmt.Errorf("closure value must be of type Closure, got %T", closure.Value)
+	}
+
+	cfg := &evalClosure{p: ec.p, closure: closure, input: empty{}, run: func(context.Context) {}}
+	for _, opt := range args {
+		if err := opt.apply(cfg); err != nil {
+			return nil, fmt.Errorf("invalid Closure argument: %w", err)
+		}
+	}
+
+	go cfg.run(ctx)
+
+	type param struct {
+		Call *evalClosure `msgpack:"EvalClosure"`
+	}
+	ch, err := ec.p.engineCall(ctx, ec.callID, param{cfg})
+	if err != nil {
+		return nil, fmt.Errorf("engine call: %w", err)
+	}
+
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case v := <-ch:
+		return ec.p.getInput(v)
+	}
+}
+
+type evalClosure struct {
+	closure         Value   `msgpack:"closure"`
+	positional      []Value `msgpack:"positional"`
+	input           any     `msgpack:"input"`
+	redirect_stdout bool    `msgpack:"redirect_stdout"`
+	redirect_stderr bool    `msgpack:"redirect_stderr"`
+
+	p   *Plugin
+	run func(ctx context.Context)
+}
+
+var _ msgpack.CustomEncoder = (*evalClosure)(nil)
+
+func (ec *evalClosure) EncodeMsgpack(enc *msgpack.Encoder) error {
+	if err := enc.EncodeMapLen(5); err != nil {
+		return err
+	}
+
+	// closure
+	if err := enc.EncodeString("closure"); err != nil {
+		return err
+	}
+	if err := enc.EncodeMapLen(2); err != nil {
+		return err
+	}
+	if err := enc.EncodeString("item"); err != nil {
+		return err
+	}
+	if err := enc.EncodeValue(reflect.ValueOf(ec.closure.Value)); err != nil {
+		return fmt.Errorf("encoding closure data: %w", err)
+	}
+	if err := enc.EncodeString("span"); err != nil {
+		return err
+	}
+	if err := enc.EncodeValue(reflect.ValueOf(&ec.closure.Span)); err != nil {
+		return err
+	}
+
+	// positional parameters
+	if err := enc.EncodeString("positional"); err != nil {
+		return err
+	}
+	if err := enc.EncodeArrayLen(len(ec.positional)); err != nil {
+		return err
+	}
+	for x, v := range ec.positional {
+		if err := v.EncodeMsgpack(enc); err != nil {
+			return fmt.Errorf("encoding positional argument [%d]: %w", x, err)
+		}
+	}
+
+	if err := enc.EncodeString("input"); err != nil {
+		return err
+	}
+	if err := encodePipelineDataHeader(enc, ec.input); err != nil {
+		return err
+	}
+
+	if err := enc.EncodeString("redirect_stdout"); err != nil {
+		return err
+	}
+	if err := enc.EncodeBool(ec.redirect_stdout); err != nil {
+		return err
+	}
+
+	if err := enc.EncodeString("redirect_stderr"); err != nil {
+		return err
+	}
+	if err := enc.EncodeBool(ec.redirect_stderr); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (ec *evalClosure) setInput(arg any) error {
+	if _, ok := ec.input.(empty); !ok {
+		return fmt.Errorf("the Input parameter has already been set to %T", ec.input)
+	}
+
+	ec.input = arg
+	return nil
+}
+
+type (
+	/*
+		EvalClosureArgument is type for [ExecCommand.EvalClosure] optional arguments.
+
+		https://www.nushell.sh/contributor-book/plugin_protocol_reference.html#evalclosure-engine-call
+	*/
+	EvalClosureArgument interface {
+		apply(*evalClosure) error
+	}
+
+	evalClosureArgument struct{ fn func(*evalClosure) error }
+)
+
+func (opt evalClosureArgument) apply(cfg *evalClosure) error { return opt.fn(cfg) }
+
+// Positional arguments for the closure.
+func Positional(args ...Value) EvalClosureArgument {
+	return evalClosureArgument{fn: func(ec *evalClosure) error {
+		if ec.positional != nil {
+			return errors.New("positional arguments have already been set")
+		}
+		ec.positional = args
+		return nil
+	}}
+}
+
+// InputValue allows to set single-value input for the closure.
+func InputValue(arg Value) EvalClosureArgument {
+	return evalClosureArgument{fn: func(ec *evalClosure) error { return ec.setInput(arg) }}
+}
+
+func InputListStream(arg <-chan Value) EvalClosureArgument {
+	return evalClosureArgument{fn: func(ec *evalClosure) error {
+		out := newOutputListValue(ec.p)
+		if err := ec.setInput(&listStream{ID: out.id, Span: ec.closure.Span}); err != nil {
+			return err
+		}
+		ec.run = func(ctx context.Context) {
+			defer close(out.data)
+			ec.p.registerOutputStream(ctx, out)
+			for v := range arg {
+				select {
+				case <-ctx.Done():
+					return
+				case out.data <- v:
+				}
+			}
+		}
+		return nil
+	}}
+}
+
+func InputRawStream(arg io.Reader) EvalClosureArgument {
+	return evalClosureArgument{fn: func(ec *evalClosure) error {
+		out := newOutputListRaw(ec.p)
+		if err := ec.setInput(&byteStream{ID: out.id, Span: ec.closure.Span, Type: "Unknown"}); err != nil {
+			return err
+		}
+		ec.run = func(ctx context.Context) {
+			ec.p.registerOutputStream(ctx, out)
+			if n, err := io.Copy(out.data, arg); err != nil {
+				ec.p.log.ErrorContext(ctx, fmt.Sprintf("raw stream error after %d bytes", n), attrError(err))
+			}
+		}
+		return nil
+	}}
+}
+
+func RedirectStdout() EvalClosureArgument {
+	return evalClosureArgument{fn: func(ec *evalClosure) error { ec.redirect_stdout = true; return nil }}
+}
+
+func RedirectStderr() EvalClosureArgument {
+	return evalClosureArgument{fn: func(ec *evalClosure) error { ec.redirect_stderr = true; return nil }}
 }
