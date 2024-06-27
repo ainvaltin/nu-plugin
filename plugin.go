@@ -214,13 +214,13 @@ func (p *Plugin) handleRun(ctx context.Context, msg run, callID int) error {
 		Positional: msg.Call.Positional,
 		Named:      msg.Call.Named,
 	}
+	ctx, exec.cancel = context.WithCancelCause(ctx)
 
 	var err error
-	if exec.Input, err = p.getInput(msg.Input); err != nil {
+	if exec.Input, err = p.getInput(ctx, msg.Input); err != nil {
 		return err
 	}
 
-	ctx, exec.cancel = context.WithCancelCause(ctx)
 	p.runs.registerInFlight(exec)
 	go func() {
 		defer p.runs.removeInFlight(exec)
@@ -228,15 +228,13 @@ func (p *Plugin) handleRun(ctx context.Context, msg run, callID int) error {
 			if err := exec.returnError(ctx, err); err != nil {
 				p.log.ErrorContext(ctx, "sending error response", attrError(err), attrCallID(callID))
 			}
-			// the stream might still be open so attempt to close it
-			exec.closeOutputStream(ctx)
-			return
 		}
+		// if cmd response is stream then close it
+		exec.closeOutputStream(ctx)
 
-		if out := exec.output.Load(); out == nil {
-			if err := exec.returnNothing(ctx); err != nil {
-				p.log.ErrorContext(ctx, "sending 'Empty' response", attrError(err), attrCallID(callID))
-			}
+		// if we haven't sent response jet (not stream) send Empty response
+		if err := exec.returnNothing(ctx); err != nil {
+			p.log.ErrorContext(ctx, "sending 'Empty' response", attrError(err), attrCallID(callID))
 		}
 	}()
 
@@ -244,10 +242,10 @@ func (p *Plugin) handleRun(ctx context.Context, msg run, callID int) error {
 }
 
 /*
-given instance of internal type returs instance of type the plugin author uses to
+given instance of internal type returns instance of type the plugin author uses to
 consume the input data.
 */
-func (p *Plugin) getInput(input any) (any, error) {
+func (p *Plugin) getInput(ctx context.Context, input any) (any, error) {
 	switch it := input.(type) {
 	case empty, nil:
 		return nil, nil
@@ -263,6 +261,7 @@ func (p *Plugin) getInput(input any) (any, error) {
 		p.iom.Lock()
 		p.inls[it.ID] = ls
 		p.iom.Unlock()
+		ls.Run(ctx)
 		return ls.InputStream(), nil
 	case byteStream:
 		ls := newInputStreamRaw(it.ID)
@@ -274,6 +273,7 @@ func (p *Plugin) getInput(input any) (any, error) {
 		p.iom.Lock()
 		p.inls[ls.id] = ls
 		p.iom.Unlock()
+		ls.Run(ctx)
 		return ls.rdr, nil
 	case LabeledError:
 		return nil, &it

@@ -8,21 +8,17 @@ import (
 
 func newOutputListRaw(p *Plugin, opts ...RawStreamOption) *rawStreamOut {
 	out := initOutputListRaw(int(p.idGen.Add(1)), opts...)
-
-	out.onSend = func(ctx context.Context, id int, b []byte) error {
-		return p.outputMsg(ctx, &data{ID: id, Data: b})
-	}
-	out.setOnDone(func(ctx context.Context, id int) error { return p.outputMsg(ctx, end{ID: id}) })
+	out.sender = p.outputMsg
 
 	return out
 }
 
 func initOutputListRaw(id int, opts ...RawStreamOption) *rawStreamOut {
 	out := &rawStreamOut{
-		id:     id,
-		sent:   make(chan struct{}, 1),
-		closer: make(chan func(ctx context.Context, id int) error, 1),
-		cfg:    rawStreamCfg{bufSize: 1024, dataType: "Unknown"},
+		id:   id,
+		done: make(chan struct{}),
+		sent: make(chan struct{}, 1),
+		cfg:  rawStreamCfg{bufSize: 1024, dataType: "Unknown"},
 	}
 	out.rdr, out.data = io.Pipe()
 
@@ -38,17 +34,10 @@ type rawStreamOut struct {
 	data   io.WriteCloser // input from plugin
 	rdr    *io.PipeReader
 	sent   chan struct{} // has the latest Data msg been Ack-ed?
-	onSend func(ctx context.Context, id int, b []byte) error
-	closer chan func(ctx context.Context, id int) error
+	sender func(ctx context.Context, data any) error
+	done   chan struct{}
 	onDrop func()
 	cfg    rawStreamCfg
-}
-
-func (rc *rawStreamOut) setOnDone(onDone func(ctx context.Context, id int) error) {
-	select {
-	case rc.closer <- onDone:
-	default:
-	}
 }
 
 func (rc *rawStreamOut) streamID() int { return rc.id }
@@ -73,6 +62,7 @@ func (rc *rawStreamOut) run(ctx context.Context) error {
 	defer func() {
 		rc.rdr.Close()
 		rc.data.Close()
+		close(rc.done)
 	}()
 
 	for eof := false; !eof; {
@@ -85,15 +75,19 @@ func (rc *rawStreamOut) run(ctx context.Context) error {
 			return fmt.Errorf("reading data: %w", err)
 		}
 		if len(buf) > 0 {
-			if err := rc.onSend(ctx, rc.id, buf); err != nil {
+			if err := rc.sender(ctx, &data{ID: rc.id, Data: buf}); err != nil {
 				return fmt.Errorf("sending data: %w", err)
 			}
-			// use select and check for cxt.Done?
-			<-rc.sent
+
+			select {
+			case <-rc.sent:
+			case <-ctx.Done():
+				return ctx.Err()
+			}
 		}
 	}
 
-	return rc.close(ctx)
+	return nil
 }
 
 func (rc *rawStreamOut) ack() error {
@@ -106,12 +100,8 @@ func (rc *rawStreamOut) ack() error {
 }
 
 func (rc *rawStreamOut) close(ctx context.Context) error {
-	select {
-	case f := <-rc.closer:
-		return f(ctx, rc.id)
-	default:
-		return nil
-	}
+	<-rc.done
+	return rc.sender(ctx, end{ID: rc.id})
 }
 
 func (rc *rawStreamOut) drop() {
@@ -124,31 +114,21 @@ func (rc *rawStreamOut) drop() {
 func newOutputListValue(p *Plugin) *listStreamOut {
 	out := &listStreamOut{
 		id:     int(p.idGen.Add(1)),
+		done:   make(chan struct{}),
 		sent:   make(chan struct{}, 1),
 		data:   make(chan Value),
-		closer: make(chan func(ctx context.Context, id int) error, 1),
+		sender: p.outputMsg,
 	}
-	out.onSend = func(ctx context.Context, id int, v Value) error {
-		return p.outputMsg(ctx, &data{ID: id, Data: v})
-	}
-	out.setOnDone(func(ctx context.Context, id int) error { return p.outputMsg(ctx, end{ID: id}) })
 	return out
 }
 
 type listStreamOut struct {
 	id     int
+	done   chan struct{}
 	sent   chan struct{}
 	data   chan Value
-	onSend func(ctx context.Context, id int, v Value) error
+	sender func(ctx context.Context, data any) error
 	onDrop func()
-	closer chan func(ctx context.Context, id int) error
-}
-
-func (rc *listStreamOut) setOnDone(onDone func(ctx context.Context, id int) error) {
-	select {
-	case rc.closer <- onDone:
-	default:
-	}
 }
 
 func (rc *listStreamOut) streamID() int { return rc.id }
@@ -156,14 +136,14 @@ func (rc *listStreamOut) streamID() int { return rc.id }
 func (rc *listStreamOut) pipelineDataHdr() any { return &listStream{ID: rc.id} }
 
 func (rc *listStreamOut) run(ctx context.Context) error {
-main_loop:
+	defer close(rc.done)
 	for {
 		select {
 		case v, ok := <-rc.data:
 			if !ok {
-				break main_loop
+				return nil
 			}
-			if err := rc.onSend(ctx, rc.id, v); err != nil {
+			if err := rc.sender(ctx, &data{ID: rc.id, Data: v}); err != nil {
 				return fmt.Errorf("send: %w", err)
 			}
 		case <-ctx.Done():
@@ -176,8 +156,6 @@ main_loop:
 			return ctx.Err()
 		}
 	}
-
-	return rc.close(ctx)
 }
 
 // main loop calls to signal that last send was ack-ed
@@ -191,12 +169,8 @@ func (rc *listStreamOut) ack() error {
 }
 
 func (rc *listStreamOut) close(ctx context.Context) error {
-	select {
-	case f := <-rc.closer:
-		return f(ctx, rc.id)
-	default:
-		return nil
-	}
+	<-rc.done
+	return rc.sender(ctx, end{ID: rc.id})
 }
 
 func (rc *listStreamOut) drop() {

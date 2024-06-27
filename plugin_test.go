@@ -477,6 +477,7 @@ func runEngine(t *testing.T, p *Plugin, msg []msgDef) {
 
 	for e := range errch {
 		t.Error(e)
+		cancel()
 	}
 }
 

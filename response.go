@@ -101,14 +101,21 @@ func (ec *ExecCommand) ReturnRawStream(ctx context.Context, opts ...RawStreamOpt
 	return out.data, nil
 }
 
+/*
+if response haven't been sent then send Empty
+*/
 func (ec *ExecCommand) returnNothing(ctx context.Context) error {
-	return ec.p.outputMsg(ctx, &callResponse{ID: ec.callID, Response: &pipelineData{Data: empty{}}})
+	if out := ec.output.Load(); out == nil {
+		return ec.p.outputMsg(ctx, &callResponse{ID: ec.callID, Response: &pipelineData{Data: empty{}}})
+	}
+	return nil
 }
 
 func (ec *ExecCommand) returnError(ctx context.Context, callErr error) error {
 	out := ec.output.Load()
 	switch s := out.(type) {
 	case nil, *Value:
+		// if we have already sent the Value response, will this get through?!
 		if err := ec.p.outputMsg(ctx, &callResponse{ID: ec.callID, Response: callErr}); err != nil {
 			return fmt.Errorf("sending error response to a Call: %w", err)
 		}
@@ -204,6 +211,7 @@ func (cf *commandsInFlight) removeInFlight(cmd *ExecCommand) {
 
 	for i := range cf.runs {
 		if cf.runs[i] == cmd {
+			cf.runs[i].cancel(nil)
 			cf.runs[i] = nil
 			cf.wg.Done()
 			return

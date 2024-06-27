@@ -23,18 +23,20 @@ func Test_rawStreamIn(t *testing.T) {
 
 	t.Run("data sent without Ack", func(t *testing.T) {
 		rs := newInputStreamRaw(1)
-		rs.onAck = func(ctx context.Context, id int) {}
+		rs.onAck = func(ctx context.Context, id int) { t.Error("unexpected call") }
+		rs.Run(context.Background())
 		if err := rs.received(context.Background(), []byte{1}); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		// receiving next one before Ack-ing previous one
 		err := rs.received(context.Background(), []byte{2})
-		expectErrorMsg(t, err, `received new Data before Ack-ing last one?`)
+		expectErrorMsg(t, err, `received new Data before Ack-ing previous one?`)
 	})
 
 	t.Run("attempt to write after end of data signal", func(t *testing.T) {
 		rs := newInputStreamRaw(1)
 		rs.onAck = func(ctx context.Context, id int) { t.Error("unexpected call") }
+		rs.Run(context.Background())
 		rs.endOfData()
 		_, err := rs.data.Write([]byte{8})
 		expectErrorMsg(t, err, `io: read/write on closed pipe`)
@@ -44,6 +46,7 @@ func Test_rawStreamIn(t *testing.T) {
 		acked := make(chan struct{})
 		rs := newInputStreamRaw(20)
 		rs.onAck = func(ctx context.Context, id int) { acked <- struct{}{} }
+		rs.Run(context.Background())
 
 		var sumW uint64
 		go func() {
@@ -90,6 +93,7 @@ func Test_listStreamIn(t *testing.T) {
 	t.Run("data sent without Ack", func(t *testing.T) {
 		ls := newInputStreamList(1)
 		ls.onAck = func(ctx context.Context, id int) {}
+		ls.Run(context.Background())
 		if err := ls.received(context.Background(), Value{Value: 2}); err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
@@ -108,9 +112,10 @@ func Test_listStreamIn(t *testing.T) {
 			}
 			close(onAckCalled)
 		}
+		ls.Run(context.Background())
 
 		if err := ls.received(context.Background(), Value{Value: 2}); err != nil {
-			t.Errorf("unexpected error: %v", err)
+			t.Fatalf("unexpected error: %v", err)
 		}
 
 		// consumer reads the input
@@ -118,7 +123,11 @@ func Test_listStreamIn(t *testing.T) {
 		if v.Value != 2 {
 			t.Errorf("expected to get value 2, got %v", v.Value)
 		}
-		<-onAckCalled
+		select {
+		case <-onAckCalled:
+		case <-time.After(time.Second):
+			t.Error("no ACK")
+		}
 
 		// should be able to send next value
 		if err := ls.received(context.Background(), Value{Value: 3}); err != nil {
@@ -134,6 +143,7 @@ func Test_listStreamIn(t *testing.T) {
 		ls.onAck = func(ctx context.Context, id int) {
 			close(onAckCalled)
 		}
+		ls.Run(context.Background())
 
 		if err := ls.received(context.Background(), Value{Value: 8}); err != nil {
 			t.Errorf("unexpected error: %v", err)
@@ -145,7 +155,11 @@ func Test_listStreamIn(t *testing.T) {
 		if v.Value != 8 {
 			t.Errorf("expected to get value 2, got %v", v.Value)
 		}
-		<-onAckCalled
+		select {
+		case <-onAckCalled:
+		case <-time.After(time.Second):
+			t.Error("no ACK")
+		}
 		// stream must get closed now than the item has been consumed
 		select {
 		case v, ok := <-ls.InputStream():
@@ -162,6 +176,7 @@ func Test_listStreamIn(t *testing.T) {
 
 		ls := newInputStreamList(20)
 		ls.onAck = func(ctx context.Context, id int) { acked <- struct{}{} }
+		ls.Run(context.Background())
 		wg := sync.WaitGroup{}
 		wg.Add(2)
 

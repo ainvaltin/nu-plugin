@@ -310,7 +310,7 @@ func (ec *ExecCommand) EvalClosure(ctx context.Context, closure Value, args ...E
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	case v := <-ch:
-		return ec.p.getInput(v)
+		return ec.p.getInput(ctx, v)
 	}
 }
 
@@ -436,7 +436,10 @@ func InputListStream(arg <-chan Value) EvalClosureArgument {
 			return err
 		}
 		ec.run = func(ctx context.Context) {
-			defer close(out.data)
+			defer func() {
+				close(out.data)
+				out.close(ctx)
+			}()
 			ec.p.registerOutputStream(ctx, out)
 			for v := range arg {
 				select {
@@ -457,6 +460,7 @@ func InputRawStream(arg io.Reader) EvalClosureArgument {
 			return err
 		}
 		ec.run = func(ctx context.Context) {
+			defer out.close(ctx)
 			ec.p.registerOutputStream(ctx, out)
 			if n, err := io.Copy(out.data, arg); err != nil {
 				ec.p.log.ErrorContext(ctx, fmt.Sprintf("raw stream error after %d bytes", n), attrError(err))

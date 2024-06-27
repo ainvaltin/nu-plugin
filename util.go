@@ -3,6 +3,7 @@ package nu
 import (
 	"fmt"
 	"log/slog"
+	"reflect"
 
 	"github.com/vmihailenco/msgpack/v5"
 )
@@ -12,6 +13,10 @@ func attrError(err error) slog.Attr {
 }
 
 func attrMsg(msg any) slog.Attr {
+	switch reflect.TypeOf(msg).Kind() {
+	case reflect.Struct:
+		return slog.Any("message", fmt.Sprintf("%#v", msg))
+	}
 	return slog.Any("message", msg)
 }
 
