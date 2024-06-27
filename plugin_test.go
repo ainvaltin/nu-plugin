@@ -29,6 +29,7 @@ func Test_Plugin_Run(t *testing.T) {
 					return nil
 				},
 			}},
+			"",
 			&Config{Logger: logger(t)},
 		)
 		if err != nil {
@@ -142,20 +143,22 @@ func Test_Plugin_Run(t *testing.T) {
 }
 
 func Test_Plugin_Signature(t *testing.T) {
-	p, err := New([]*Command{
-		{
-			Signature: PluginSignature{
-				Name:             "foo bar",
-				Category:         "Experimental",
-				Usage:            "test cmd",
-				SearchTerms:      []string{"foo"},
-				InputOutputTypes: [][]string{{"Any", "Any"}},
-			},
-			OnRun: func(ctx context.Context, exec *ExecCommand) error {
-				return nil
+	p, err := New(
+		[]*Command{
+			{
+				Signature: PluginSignature{
+					Name:             "foo bar",
+					Category:         "Experimental",
+					Usage:            "test cmd",
+					SearchTerms:      []string{"foo"},
+					InputOutputTypes: [][]string{{"Any", "Any"}},
+				},
+				OnRun: func(ctx context.Context, exec *ExecCommand) error {
+					return nil
+				},
 			},
 		},
-	},
+		"",
 		&Config{Logger: logger(t)},
 	)
 	if err != nil {
@@ -179,14 +182,16 @@ func Test_Plugin_response(t *testing.T) {
 	}
 
 	t.Run("Error response", func(t *testing.T) {
-		p, err := New([]*Command{
-			{
-				Signature: signature,
-				OnRun: func(ctx context.Context, exec *ExecCommand) error {
-					return fmt.Errorf("sorry")
+		p, err := New(
+			[]*Command{
+				{
+					Signature: signature,
+					OnRun: func(ctx context.Context, exec *ExecCommand) error {
+						return fmt.Errorf("sorry")
+					},
 				},
 			},
-		},
+			"",
 			&Config{Logger: logger(t)},
 		)
 		if err != nil {
@@ -200,14 +205,16 @@ func Test_Plugin_response(t *testing.T) {
 	})
 
 	t.Run("Single Value response", func(t *testing.T) {
-		p, err := New([]*Command{
-			{
-				Signature: signature,
-				OnRun: func(ctx context.Context, exec *ExecCommand) error {
-					return exec.ReturnValue(ctx, Value{Value: 42})
+		p, err := New(
+			[]*Command{
+				{
+					Signature: signature,
+					OnRun: func(ctx context.Context, exec *ExecCommand) error {
+						return exec.ReturnValue(ctx, Value{Value: 42})
+					},
 				},
 			},
-		},
+			"",
 			&Config{Logger: logger(t)},
 		)
 		if err != nil {
@@ -221,21 +228,23 @@ func Test_Plugin_response(t *testing.T) {
 	})
 
 	t.Run("List of Values response", func(t *testing.T) {
-		p, err := New([]*Command{
-			{
-				Signature: signature,
-				OnRun: func(ctx context.Context, exec *ExecCommand) error {
-					out, err := exec.ReturnListStream(ctx)
-					if err != nil {
-						return fmt.Errorf("getting the return list: %w", err)
-					}
-					out <- Value{Value: "v1"}
-					out <- Value{Value: "v2"}
-					close(out)
-					return nil
+		p, err := New(
+			[]*Command{
+				{
+					Signature: signature,
+					OnRun: func(ctx context.Context, exec *ExecCommand) error {
+						out, err := exec.ReturnListStream(ctx)
+						if err != nil {
+							return fmt.Errorf("getting the return list: %w", err)
+						}
+						out <- Value{Value: "v1"}
+						out <- Value{Value: "v2"}
+						close(out)
+						return nil
+					},
 				},
 			},
-		},
+			"",
 			&Config{Logger: logger(t)},
 		)
 		if err != nil {
@@ -255,20 +264,22 @@ func Test_Plugin_response(t *testing.T) {
 	})
 
 	t.Run("List of bytes response", func(t *testing.T) {
-		p, err := New([]*Command{
-			{
-				Signature: signature,
-				OnRun: func(ctx context.Context, exec *ExecCommand) error {
-					out, err := exec.ReturnRawStream(ctx)
-					if err != nil {
-						return fmt.Errorf("getting output writer: %w", err)
-					}
-					out.Write([]byte("first"))
-					out.Write([]byte("second"))
-					return out.Close()
+		p, err := New(
+			[]*Command{
+				{
+					Signature: signature,
+					OnRun: func(ctx context.Context, exec *ExecCommand) error {
+						out, err := exec.ReturnRawStream(ctx)
+						if err != nil {
+							return fmt.Errorf("getting output writer: %w", err)
+						}
+						out.Write([]byte("first"))
+						out.Write([]byte("second"))
+						return out.Close()
+					},
 				},
 			},
-		},
+			"",
 			&Config{Logger: logger(t)},
 		)
 		if err != nil {
@@ -296,19 +307,21 @@ func Test_Plugin_input(t *testing.T) {
 	}
 
 	t.Run("Empty input", func(t *testing.T) {
-		p, err := New([]*Command{
-			{
-				Signature: signature,
-				OnRun: func(ctx context.Context, exec *ExecCommand) error {
-					switch vt := exec.Input.(type) {
-					case nil:
-					default:
-						t.Errorf("unexpected input type %T", vt)
-					}
-					return nil
+		p, err := New(
+			[]*Command{
+				{
+					Signature: signature,
+					OnRun: func(ctx context.Context, exec *ExecCommand) error {
+						switch vt := exec.Input.(type) {
+						case nil:
+						default:
+							t.Errorf("unexpected input type %T", vt)
+						}
+						return nil
+					},
 				},
 			},
-		},
+			"",
 			&Config{Logger: logger(t)},
 		)
 		if err != nil {
@@ -321,22 +334,24 @@ func Test_Plugin_input(t *testing.T) {
 	})
 
 	t.Run("Single Value", func(t *testing.T) {
-		p, err := New([]*Command{
-			{
-				Signature: signature,
-				OnRun: func(ctx context.Context, exec *ExecCommand) error {
-					switch vt := exec.Input.(type) {
-					case Value:
-						if vt.Value != "input" {
-							t.Errorf("expected 'input' got %q", vt.Value)
+		p, err := New(
+			[]*Command{
+				{
+					Signature: signature,
+					OnRun: func(ctx context.Context, exec *ExecCommand) error {
+						switch vt := exec.Input.(type) {
+						case Value:
+							if vt.Value != "input" {
+								t.Errorf("expected 'input' got %q", vt.Value)
+							}
+						default:
+							t.Errorf("unexpected input type %T", vt)
 						}
-					default:
-						t.Errorf("unexpected input type %T", vt)
-					}
-					return nil
+						return nil
+					},
 				},
 			},
-		},
+			"",
 			&Config{Logger: logger(t)},
 		)
 		if err != nil {
@@ -349,29 +364,31 @@ func Test_Plugin_input(t *testing.T) {
 	})
 
 	t.Run("Value List", func(t *testing.T) {
-		p, err := New([]*Command{
-			{
-				Signature: signature,
-				OnRun: func(ctx context.Context, exec *ExecCommand) error {
-					var in <-chan Value
-					switch vt := exec.Input.(type) {
-					case <-chan Value:
-						if vt == nil {
-							t.Errorf("input stream is nil")
+		p, err := New(
+			[]*Command{
+				{
+					Signature: signature,
+					OnRun: func(ctx context.Context, exec *ExecCommand) error {
+						var in <-chan Value
+						switch vt := exec.Input.(type) {
+						case <-chan Value:
+							if vt == nil {
+								t.Errorf("input stream is nil")
+							}
+							in = vt
+						default:
+							t.Errorf("unexpected input type %T", vt)
 						}
-						in = vt
-					default:
-						t.Errorf("unexpected input type %T", vt)
-					}
-					for v := range in {
-						if v.Value != "first" {
-							t.Errorf("expected 'first' got %v", v.Value)
+						for v := range in {
+							if v.Value != "first" {
+								t.Errorf("expected 'first' got %v", v.Value)
+							}
 						}
-					}
-					return nil
+						return nil
+					},
 				},
 			},
-		},
+			"",
 			&Config{Logger: logger(t)},
 		)
 		if err != nil {

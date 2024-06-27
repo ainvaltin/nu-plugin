@@ -23,10 +23,13 @@ var ErrDropStream = errors.New("received Drop stream message")
 /*
 New creates new Nushell Plugin with given commands.
 
+version: The version of the plugin. SemVer is recommended, but not required.
+
 The cfg may be nil, in that case default configuration will be used.
 */
-func New(cmd []*Command, cfg *Config) (_ *Plugin, err error) {
+func New(cmd []*Command, version string, cfg *Config) (_ *Plugin, err error) {
 	p := &Plugin{
+		ver:  version,
 		cmds: make(map[string]*Command),
 		outs: make(map[int]outputStream),
 		inls: make(map[int]inputStream),
@@ -66,6 +69,7 @@ The zero value is not usable, the [New] constructor must be used to create Plugi
 */
 type Plugin struct {
 	cmds map[string]*Command // available commands
+	ver  string              // plugin version
 
 	runs  commandsInFlight
 	iom   sync.Mutex // to sync in and out maps
@@ -183,21 +187,27 @@ func (p *Plugin) handleMessage(ctx context.Context, msg any) error {
 func (p *Plugin) handleCall(ctx context.Context, msg call) error {
 	switch m := msg.Call.(type) {
 	case signature:
-		return p.handleSignature(ctx)
+		return p.handleSignature(ctx, msg.ID)
 	case run:
 		return p.handleRun(ctx, m, msg.ID)
+	case metadata:
+		return p.handleMetadata(ctx, msg.ID)
 	default:
 		return fmt.Errorf("unknown Call message %T", m)
 	}
 }
 
-func (p *Plugin) handleSignature(ctx context.Context) error {
+func (p *Plugin) handleMetadata(ctx context.Context, callID int) error {
+	return p.outputMsg(ctx, &callResponse{ID: callID, Response: metadata{p.ver}})
+}
+
+func (p *Plugin) handleSignature(ctx context.Context, callID int) error {
 	sigs := make([]*Command, 0, len(p.cmds))
 	for _, v := range p.cmds {
 		v := v
 		sigs = append(sigs, v)
 	}
-	return p.outputMsg(ctx, &callResponse{Response: sigs})
+	return p.outputMsg(ctx, &callResponse{ID: callID, Response: sigs})
 }
 
 func (p *Plugin) handleRun(ctx context.Context, msg run, callID int) error {

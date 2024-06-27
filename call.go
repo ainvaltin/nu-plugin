@@ -16,6 +16,11 @@ type (
 
 	signature struct{}
 
+	// share the same struct for both input and output for now
+	metadata struct {
+		Version string `msgpack:"version,omitempty"`
+	}
+
 	run struct {
 		Name  string        `msgpack:"name"`
 		Call  evaluatedCall `msgpack:"call"`
@@ -76,6 +81,8 @@ func decodeCall(dec *msgpack.Decoder) (any, error) {
 		switch s {
 		case "Signature":
 			m.Call = signature{}
+		case "Metadata":
+			m.Call = metadata{}
 		default:
 			return nil, fmt.Errorf("unknown Call command %q", s)
 		}
@@ -314,6 +321,11 @@ func (cr *callResponse) EncodeMsgpack(enc *msgpack.Encoder) error {
 		return encodeErrorResponse(enc, dt)
 	case error:
 		return encodeErrorResponse(enc, AsLabeledError(dt))
+	case metadata:
+		if err := encodeMapStart(enc, "Metadata"); err != nil {
+			return err
+		}
+		return enc.EncodeValue(reflect.ValueOf(&dt))
 	case []*Command:
 		if err := encodeMapStart(enc, "Signature"); err != nil {
 			return err
