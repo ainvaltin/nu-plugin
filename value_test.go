@@ -17,7 +17,8 @@ func Test_Value_DeEncode(t *testing.T) {
 		in  Value // value encoded
 		out Value // value we expect to get by decoding encoded "in"
 	}{
-		{in: Value{Value: nil}, out: Value{Value: nil}}, // Nothing
+		{in: Value{Value: nil}, out: Value{Value: nil}},                                                             // Nothing
+		{in: Value{Value: nil, Span: Span{Start: 2, End: 7}}, out: Value{Value: nil, Span: Span{Start: 2, End: 7}}}, // Nothing
 		{in: Value{Value: int(1)}, out: Value{Value: int64(1)}},
 		{in: Value{Value: int(1), Span: Span{Start: 1020, End: 1050}}, out: Value{Value: int64(1), Span: Span{Start: 1020, End: 1050}}},
 		{in: Value{Value: int8(2)}, out: Value{Value: int64(2)}},
@@ -46,6 +47,9 @@ func Test_Value_DeEncode(t *testing.T) {
 		{in: Value{Value: fmt.Errorf("oops")}, out: Value{Value: LabeledError{Msg: "oops"}}},
 		{in: Value{Value: Closure{BlockID: 8}}, out: Value{Value: Closure{BlockID: 8}}},
 		{in: Value{Value: Closure{BlockID: 8, Captures: []byte{144}}}, out: Value{Value: Closure{BlockID: 8, Captures: []byte{144}}}},
+		{in: Value{Value: Glob{Value: "[a-z].txt", NoExpand: false}}, out: Value{Value: Glob{Value: "[a-z].txt", NoExpand: false}}},
+		{in: Value{Value: Glob{Value: "**/*.txt", NoExpand: true}}, out: Value{Value: Glob{Value: "**/*.txt", NoExpand: true}}},
+		{in: Value{Value: Glob{Value: "foo.txt"}, Span: Span{Start: 1, End: 8}}, out: Value{Value: Glob{Value: "foo.txt"}, Span: Span{Start: 1, End: 8}}},
 	}
 
 	for x, tc := range testCases {
@@ -61,7 +65,7 @@ func Test_Value_DeEncode(t *testing.T) {
 		}
 
 		if diff := cmp.Diff(dv, tc.out); diff != "" {
-			t.Errorf("[%d]%T type mismatch (-input +output):\n%s", x, tc.in.Value, diff)
+			t.Errorf("[%d] encoding %T mismatch (-input +output):\n%s", x, tc.in.Value, diff)
 		}
 	}
 }

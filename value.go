@@ -10,9 +10,55 @@ import (
 )
 
 /*
-Value represents Nushell Value
+Value represents [Nushell Value].
 
-https://www.nushell.sh/contributor-book/plugin_protocol_reference.html#value-types
+Generally type switch or type assertion has to be used to access the
+"underling value", ie
+
+	switch data := in.Value.(type) {
+	case []byte:
+		buf = data
+	case string:
+		buf = []byte(data)
+	default:
+		return fmt.Errorf("unsupported Value type %T", data)
+	}
+
+Incoming data is encoded as follows:
+
+  - Nothing -> nil
+  - Bool -> bool
+  - Binary -> []byte
+  - String -> string
+  - Int -> int64
+  - Float -> float64
+  - Filesize -> [Filesize]
+  - Duration -> [time.Duration]
+  - Date -> [time.Time]
+  - Record -> [Record]
+  - List -> []Value
+  - Glob -> [Glob]
+  - Closure -> [Closure]
+
+Outgoing values are encoded as:
+
+  - nil -> Nothing
+  - int, int8, int16, int32, int64 -> Int
+  - uint, uint8, uint16, uint32, uint64 -> Int
+  - float64, float32 -> Float
+  - bool -> Bool
+  - []byte -> Binary
+  - string -> String
+  - [Filesize] -> Filesize
+  - [time.Duration] -> Duration
+  - [time.Time] -> Date
+  - [Record] -> Record
+  - []Value -> List
+  - [Glob] -> Glob
+  - [Closure] -> Closure
+  - error -> LabeledError
+
+[Nushell Value]: https://www.nushell.sh/contributor-book/plugin_protocol_reference.html#value-types
 */
 type Value struct {
 	Value any
@@ -25,10 +71,28 @@ type Span struct {
 }
 
 /*
-Filesize is Nushell Filesize Value type, see
-https://www.nushell.sh/contributor-book/plugin_protocol_reference.html#filesize
+Filesize is Nushell [Filesize Value] type.
+
+[Filesize Value]: https://www.nushell.sh/contributor-book/plugin_protocol_reference.html#filesize
 */
 type Filesize int64
+
+/*
+Glob is Nushell [Glob Value] type - a filesystem glob, selecting multiple files or
+directories depending on the expansion of wildcards.
+
+Note that [Go stdlib glob] implementation doesn't support doublestar / globstar
+pattern but thirdparty libraries which do exist.
+
+[Glob Value]: https://www.nushell.sh/contributor-book/plugin_protocol_reference.html#glob
+[Go stdlib glob]: https://pkg.go.dev/path/filepath#Glob
+*/
+type Glob struct {
+	Value string
+	// If true, the expansion of wildcards is disabled and Value should be treated
+	// as a literal path.
+	NoExpand bool
+}
 
 type Record map[string]Value
 
@@ -165,6 +229,8 @@ func (v *Value) EncodeMsgpack(enc *msgpack.Encoder) error {
 			return err
 		}
 		err = enc.EncodeValue(reflect.ValueOf(&tv))
+	case Glob:
+		err = encodeGlob(enc, &tv)
 	case error:
 		err = encodeLabeledError(enc, AsLabeledError(tv))
 	case LabeledError:
@@ -231,6 +297,29 @@ func encodeValueList(enc *msgpack.Encoder, items []Value) error {
 	return nil
 }
 
+// encode Glob value minus the Span member of the Value
+func encodeGlob(enc *msgpack.Encoder, glob *Glob) error {
+	if err := enc.EncodeString("Glob"); err != nil {
+		return err
+	}
+	if err := enc.EncodeMapLen(3); err != nil {
+		return err
+	}
+	if err := enc.EncodeString("val"); err != nil {
+		return err
+	}
+	if err := enc.EncodeString(glob.Value); err != nil {
+		return err
+	}
+	if err := enc.EncodeString("no_expand"); err != nil {
+		return err
+	}
+	if err := enc.EncodeBool(glob.NoExpand); err != nil {
+		return err
+	}
+	return nil
+}
+
 func encodeLabeledError(enc *msgpack.Encoder, le *LabeledError) error {
 	if err := enc.EncodeString("Error"); err != nil {
 		return err
@@ -251,7 +340,12 @@ func (v *Value) DecodeMsgpack(dec *msgpack.Decoder) error {
 	if err != nil {
 		return err
 	}
-	return v.decodeValue(dec, name)
+	switch name {
+	case "Glob":
+		return decodeGlob(dec, v)
+	default:
+		return v.decodeValue(dec, name)
+	}
 }
 
 func (v *Value) decodeValue(dec *msgpack.Decoder, typeName string) error {
@@ -370,4 +464,38 @@ func decodeBinary(dec *msgpack.Decoder) ([]byte, error) {
 	default:
 		return nil, fmt.Errorf("unsupported Binary value starting %x", c)
 	}
+}
+
+// the enclosing map has been red and we need to decode the struct itself.
+func decodeGlob(dec *msgpack.Decoder, value *Value) error {
+	n, err := dec.DecodeMapLen()
+	if err != nil {
+		return err
+	}
+	if n == -1 {
+		return nil
+	}
+
+	g := Glob{}
+	for idx := 0; idx < n; idx++ {
+		fieldName, err := dec.DecodeString()
+		if err != nil {
+			return fmt.Errorf("decoding field name [%d/%d] of Glob: %w", idx+1, n, err)
+		}
+		switch fieldName {
+		case "val":
+			g.Value, err = dec.DecodeString()
+		case "no_expand":
+			g.NoExpand, err = dec.DecodeBool()
+		case "span":
+			err = dec.DecodeValue(reflect.ValueOf(&value.Span))
+		default:
+			return fmt.Errorf("unsupported Glob Value field %q", fieldName)
+		}
+		if err != nil {
+			return fmt.Errorf("decoding field %s of Glob: %w", fieldName, err)
+		}
+	}
+	value.Value = g
+	return nil
 }
