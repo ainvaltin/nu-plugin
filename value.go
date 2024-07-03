@@ -39,6 +39,7 @@ Incoming data is encoded as follows:
   - List -> []Value
   - Glob -> [Glob]
   - Closure -> [Closure]
+  - Block -> [Block]
 
 Outgoing values are encoded as:
 
@@ -56,6 +57,7 @@ Outgoing values are encoded as:
   - []Value -> List
   - [Glob] -> Glob
   - [Closure] -> Closure
+  - [Block] -> Block
   - error -> LabeledError
 
 [Nushell Value]: https://www.nushell.sh/contributor-book/plugin_protocol_reference.html#value-types
@@ -107,6 +109,13 @@ type Closure struct {
 	BlockID  uint               `msgpack:"block_id"`
 	Captures msgpack.RawMessage `msgpack:"captures"`
 }
+
+/*
+Block is Nushell [Block Value] type.
+
+[Block Value]: https://www.nushell.sh/contributor-book/plugin_protocol_reference.html#block
+*/
+type Block uint64
 
 var _ msgpack.CustomEncoder = (*Value)(nil)
 
@@ -229,6 +238,11 @@ func (v *Value) EncodeMsgpack(enc *msgpack.Encoder) error {
 			return err
 		}
 		err = enc.EncodeValue(reflect.ValueOf(&tv))
+	case Block:
+		if err := startValue(enc, "Block"); err != nil {
+			return err
+		}
+		err = enc.EncodeInt64(int64(tv))
 	case Glob:
 		err = encodeGlob(enc, &tv)
 	case error:
@@ -397,6 +411,10 @@ func (v *Value) decodeValue(dec *msgpack.Decoder, typeName string) error {
 				c := Closure{}
 				err = dec.DecodeValue(reflect.ValueOf(&c))
 				v.Value = c
+			case "Block":
+				var id int64
+				id, err = dec.DecodeInt64()
+				v.Value = Block(id)
 			default:
 				return fmt.Errorf("unsupported Value type %q", typeName)
 			}

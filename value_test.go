@@ -40,6 +40,7 @@ func Test_Value_DeEncode(t *testing.T) {
 		{in: Value{Value: "foo bar"}, out: Value{Value: "foo bar"}},
 		{in: Value{Value: []byte{0, 1, 2, 127, 128, 254, 255}}, out: Value{Value: []byte{0, 1, 2, 127, 128, 254, 255}}},
 		{in: Value{Value: Filesize(1001)}, out: Value{Value: Filesize(1001)}},
+		{in: Value{Value: Block(1002)}, out: Value{Value: Block(1002)}},
 		{in: Value{Value: 11 * time.Minute}, out: Value{Value: 11 * time.Minute}},
 		{in: Value{Value: time.Date(2024, 05, 25, 14, 55, 06, 0, time.UTC)}, out: Value{Value: time.Date(2024, 05, 25, 14, 55, 06, 0, time.UTC)}},
 		{in: Value{Value: Record{"foo": Value{Value: "bar"}, "int": Value{Value: 12}}}, out: Value{Value: Record{"foo": Value{Value: "bar"}, "int": Value{Value: int64(12)}}}},
