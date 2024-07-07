@@ -51,6 +51,9 @@ func Test_Value_DeEncode(t *testing.T) {
 		{in: Value{Value: Glob{Value: "[a-z].txt", NoExpand: false}}, out: Value{Value: Glob{Value: "[a-z].txt", NoExpand: false}}},
 		{in: Value{Value: Glob{Value: "**/*.txt", NoExpand: true}}, out: Value{Value: Glob{Value: "**/*.txt", NoExpand: true}}},
 		{in: Value{Value: Glob{Value: "foo.txt"}, Span: Span{Start: 1, End: 8}}, out: Value{Value: Glob{Value: "foo.txt"}, Span: Span{Start: 1, End: 8}}},
+		{in: Value{Value: IntRange{Start: 1, Step: 2, End: 3, Bound: Included}}, out: Value{Value: IntRange{Start: 1, Step: 2, End: 3, Bound: Included}}},
+		{in: Value{Value: IntRange{Start: 1, Step: 2, End: 3, Bound: Excluded}}, out: Value{Value: IntRange{Start: 1, Step: 2, End: 3, Bound: Excluded}}},
+		{in: Value{Value: IntRange{Start: 1, Step: 2, End: 3, Bound: Unbounded}}, out: Value{Value: IntRange{Start: 1, Step: 2, End: 0, Bound: Unbounded}}},
 	}
 
 	for x, tc := range testCases {

@@ -40,6 +40,7 @@ Incoming data is encoded as follows:
   - Glob -> [Glob]
   - Closure -> [Closure]
   - Block -> [Block]
+  - Range -> [IntRange]
 
 Outgoing values are encoded as:
 
@@ -58,6 +59,7 @@ Outgoing values are encoded as:
   - [Glob] -> Glob
   - [Closure] -> Closure
   - [Block] -> Block
+  - [IntRange] -> Range
   - error -> LabeledError
 
 [Nushell Value]: https://www.nushell.sh/contributor-book/plugin_protocol_reference.html#value-types
@@ -245,6 +247,11 @@ func (v *Value) EncodeMsgpack(enc *msgpack.Encoder) error {
 		err = enc.EncodeInt64(int64(tv))
 	case Glob:
 		err = encodeGlob(enc, &tv)
+	case IntRange:
+		if err := startValue(enc, "Range"); err != nil {
+			return err
+		}
+		err = tv.EncodeMsgpack(enc)
 	case error:
 		err = encodeLabeledError(enc, AsLabeledError(tv))
 	case LabeledError:
@@ -415,6 +422,8 @@ func (v *Value) decodeValue(dec *msgpack.Decoder, typeName string) error {
 				var id int64
 				id, err = dec.DecodeInt64()
 				v.Value = Block(id)
+			case "Range":
+				v.Value, err = decodeMsgpackRange(dec)
 			default:
 				return fmt.Errorf("unsupported Value type %q", typeName)
 			}

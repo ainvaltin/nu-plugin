@@ -89,7 +89,7 @@ func decodeTupleStart(d *msgpack.Decoder) (int, error) {
 
 /*
 decodeWrapperMap reads the "single item map" whose key is string - the
-key name is returned.
+key name is returned and decoder is ready to read the value.
 */
 func decodeWrapperMap(dec *msgpack.Decoder) (string, error) {
 	cnt, err := dec.DecodeMapLen()

@@ -50,7 +50,7 @@ func ExampleInputListStream() {
 				}
 				close(out)
 			default:
-				return fmt.Errorf("unsupported closure output type %T", data)
+				return fmt.Errorf("unexpected closure output type %T", data)
 			}
 			return nil
 		},
