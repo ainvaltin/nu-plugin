@@ -16,6 +16,9 @@ import (
 // ErrGoodbye is the exit cause when plugin received Goodbye message.
 var ErrGoodbye = errors.New("Goodbye")
 
+// ErrInterrupt is the exit cause when plugin received Interrupt signal.
+var ErrInterrupt = errors.New("received Interrupt signal")
+
 // ErrDropStream is context cancellation (command's OnRun handler) or stream close error
 // when consumer sent Drop message (ie plugin should stop producing into output stream).
 var ErrDropStream = errors.New("received Drop stream message")
@@ -142,6 +145,8 @@ func (p *Plugin) mainMsgLoop(ctx context.Context) error {
 		case nil:
 		case io.EOF:
 			return nil
+		case ErrInterrupt:
+			return ErrInterrupt
 		default:
 			p.log.ErrorContext(ctx, "decoding top-level message", attrError(err))
 			continue
@@ -177,6 +182,9 @@ func (p *Plugin) handleMessage(ctx context.Context, msg any) error {
 		return p.handleDrop(ctx, m.ID)
 	case engineCallResponse:
 		return p.handleEngineCallResponse(ctx, m)
+	case signal:
+		p.log.InfoContext(ctx, "got Signal: "+m.Signal)
+		return nil
 	case hello:
 		return nil
 	default:

@@ -138,6 +138,12 @@ func handleMsgDecode(dec *msgpack.Decoder, name string) (_ interface{}, err erro
 	case "Hello":
 		m := hello{}
 		return m, dec.DecodeValue(reflect.ValueOf(&m))
+	case "Signal":
+		m := signal{}
+		if m.Signal, err = dec.DecodeString(); m.Signal == "Interrupt" {
+			return nil, ErrInterrupt
+		}
+		return m, err
 	default:
 		return nil, fmt.Errorf("unknown message %q", name)
 	}

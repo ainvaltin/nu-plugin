@@ -39,6 +39,10 @@ type (
 		ID       int
 		Response any
 	}
+
+	signal struct {
+		Signal string `msgpack:"Signal"`
+	}
 )
 
 type (
