@@ -22,6 +22,7 @@ func Test_rawStreamIn(t *testing.T) {
 	})
 
 	t.Run("data sent without Ack", func(t *testing.T) {
+		t.Skip("engine doesn't wait for Ack before sending next Data msg")
 		rs := newInputStreamRaw(1)
 		rs.onAck = func(ctx context.Context, id int) { t.Error("unexpected call") }
 		rs.Run(context.Background())
@@ -91,6 +92,7 @@ func Test_listStreamIn(t *testing.T) {
 	})
 
 	t.Run("data sent without Ack", func(t *testing.T) {
+		t.Skip("engine doesn't wait for Ack before sending next Data msg")
 		ls := newInputStreamList(1)
 		ls.onAck = func(ctx context.Context, id int) {}
 		ls.Run(context.Background())

@@ -9,7 +9,7 @@ import (
 func newInputStreamRaw(id int) *rawStreamIn {
 	out := &rawStreamIn{
 		id:  id,
-		buf: make(chan []byte),
+		buf: make(chan []byte, 10),
 	}
 	out.rdr, out.data = io.Pipe()
 	return out
@@ -52,12 +52,8 @@ func (lsi *rawStreamIn) received(ctx context.Context, v any) error {
 	if !ok {
 		return fmt.Errorf("raw stream input must be of type []byte, got %T", v)
 	}
-	select {
-	case lsi.buf <- in:
-		return nil
-	default:
-		return fmt.Errorf("received new Data before Ack-ing previous one?")
-	}
+	lsi.buf <- in
+	return nil
 }
 
 func (lsi *rawStreamIn) endOfData() {
@@ -68,7 +64,7 @@ func newInputStreamList(id int) *listStreamIn {
 	in := &listStreamIn{
 		id:   id,
 		data: make(chan Value),
-		buf:  make(chan Value),
+		buf:  make(chan Value, 10),
 	}
 	return in
 }
@@ -90,7 +86,7 @@ func (lsi *listStreamIn) InputStream() <-chan Value {
 }
 
 func (lsi *listStreamIn) Run(ctx context.Context) {
-	// hakish way to make sure that when this func returns the
+	// hackish way to make sure that when this func returns the
 	// goroutine is running. otherwise ie tests are flaky...
 	up := make(chan struct{})
 
@@ -124,13 +120,8 @@ func (lsi *listStreamIn) received(ctx context.Context, v any) error {
 	if !ok {
 		return fmt.Errorf("list stream input must be of type Value, got %T", v)
 	}
-
-	select {
-	case lsi.buf <- in:
-		return nil
-	default:
-		return fmt.Errorf("received new Data before Ack-ing previous one?")
-	}
+	lsi.buf <- in
+	return nil
 }
 
 // main loop signals there will be no more data for the stream
