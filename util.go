@@ -13,9 +13,11 @@ func attrError(err error) slog.Attr {
 }
 
 func attrMsg(msg any) slog.Attr {
-	switch reflect.TypeOf(msg).Kind() {
-	case reflect.Struct:
-		return slog.Any("message", fmt.Sprintf("%#v", msg))
+	if mt := reflect.TypeOf(msg); mt != nil {
+		switch mt.Kind() {
+		case reflect.Struct:
+			return slog.Any("message", fmt.Sprintf("%#v", msg))
+		}
 	}
 	return slog.Any("message", msg)
 }

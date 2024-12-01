@@ -44,20 +44,34 @@ type (
 type (
 	empty struct{}
 
+	// Value tuple variant as used by PipelineDataHeader
+	pipelineValue struct {
+		V Value
+		M pipelineMetadata
+	}
+
 	listStream struct {
-		ID   int  `msgpack:"id"`
-		Span Span `msgpack:"span"`
+		ID   int              `msgpack:"id"`
+		Span Span             `msgpack:"span"`
+		MD   pipelineMetadata `msgpack:"metadata"`
 	}
 
 	byteStream struct {
-		ID   int    `msgpack:"id"`
-		Span Span   `msgpack:"span"`
-		Type string `msgpack:"type"`
+		ID   int              `msgpack:"id"`
+		Span Span             `msgpack:"span"`
+		Type string           `msgpack:"type"`
+		MD   pipelineMetadata `msgpack:"metadata"`
 	}
 
 	// A successful result with a Nu Value or stream. The body is a PipelineDataHeader.
 	pipelineData struct {
 		Data any `msgpack:"PipelineData"`
+	}
+
+	pipelineMetadata struct {
+		DataSource  string
+		FilePath    string // assigned when DataSource == FilePath
+		ContentType string
 	}
 )
 
@@ -155,15 +169,15 @@ func decodePipelineDataHeader(dec *msgpack.Decoder) (any, error) {
 	case msgpcode.IsFixedMap(c):
 		name, err := decodeWrapperMap(dec)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("decoding PipelineHeader map: %w", err)
 		}
 		switch name {
 		case "Value":
-			v := Value{}
+			v := pipelineValue{}
 			if err := v.DecodeMsgpack(dec); err != nil {
-				return nil, err
+				return nil, fmt.Errorf("decoding pipelineValue: %w", err)
 			}
-			return v, nil
+			return v.V, nil
 		case "ListStream":
 			v := listStream{}
 			if err := dec.DecodeValue(reflect.ValueOf(&v)); err != nil {
@@ -187,10 +201,7 @@ func decodePipelineDataHeader(dec *msgpack.Decoder) (any, error) {
 func encodePipelineDataHeader(enc *msgpack.Encoder, data any) error {
 	switch dt := data.(type) {
 	case *Value:
-		if err := encodeMapStart(enc, "Value"); err != nil {
-			return err
-		}
-		return dt.EncodeMsgpack(enc)
+		return (&pipelineValue{V: *dt}).EncodeMsgpack(enc)
 	case *listStream:
 		if err := encodeMapStart(enc, "ListStream"); err != nil {
 			return err
@@ -366,4 +377,110 @@ var _ msgpack.CustomDecoder = (*pipelineData)(nil)
 func (pd *pipelineData) DecodeMsgpack(dec *msgpack.Decoder) (err error) {
 	pd.Data, err = decodePipelineDataHeader(dec)
 	return err
+}
+
+func (pv *pipelineValue) EncodeMsgpack(enc *msgpack.Encoder) error {
+	if err := encodeMapStart(enc, "Value"); err != nil {
+		return err
+	}
+	if err := enc.EncodeArrayLen(2); err != nil {
+		return fmt.Errorf("encoding PipelineDataHeader Value tuple length: %w", err)
+	}
+	if err := pv.V.EncodeMsgpack(enc); err != nil {
+		return fmt.Errorf("encoding PipelineDataHeader of Value: %w", err)
+	}
+	return pv.M.EncodeMsgpack(enc)
+}
+
+func (pv *pipelineValue) DecodeMsgpack(dec *msgpack.Decoder) error {
+	dLen, err := dec.DecodeArrayLen()
+	if err != nil {
+		return fmt.Errorf("decode tuple length of Value: %w", err)
+	}
+	if dLen != 2 {
+		return fmt.Errorf("expected two item tuple, got %d items", dLen)
+	}
+	if err = pv.V.DecodeMsgpack(dec); err != nil {
+		return fmt.Errorf("decoding Value: %w", err)
+	}
+	if err = pv.M.DecodeMsgpack(dec); err != nil {
+		return fmt.Errorf("decoding Value's metadata: %w", err)
+	}
+	return nil
+}
+
+func (md *pipelineMetadata) EncodeMsgpack(enc *msgpack.Encoder) error {
+	// todo: implement serializing when not empty
+	return enc.EncodeNil()
+}
+
+func (md *pipelineMetadata) DecodeMsgpack(dec *msgpack.Decoder) error {
+	c, err := dec.PeekCode()
+	if err != nil {
+		return err
+	}
+	switch {
+	case c == msgpcode.Nil:
+		return dec.DecodeNil()
+	case msgpcode.IsFixedMap(c):
+		ml, err := dec.DecodeMapLen()
+		if err != nil {
+			return fmt.Errorf("decode map length: %w", err)
+		}
+		for ; ml > 0; ml-- {
+			key, err := dec.DecodeString()
+			if err != nil {
+				return fmt.Errorf("decoding metadata key: %w", err)
+			}
+
+			c, err := dec.PeekCode()
+			if err != nil {
+				return fmt.Errorf("peeking value type of %q: %w", key, err)
+			}
+			switch key {
+			case "data_source":
+				switch {
+				case msgpcode.IsString(c):
+					if md.DataSource, err = dec.DecodeString(); err != nil {
+						return fmt.Errorf("decoding DataSource value: %w", err)
+					}
+				case msgpcode.IsFixedMap(c):
+					// must be map(1): "FilePath"=<path>
+					ml, err := dec.DecodeMapLen()
+					if err != nil {
+						return fmt.Errorf("decode map length: %w", err)
+					}
+					if ml != 1 {
+						return fmt.Errorf("expected value of data_source to be map(1) but got %d items", ml)
+					}
+					if md.DataSource, err = dec.DecodeString(); err != nil {
+						return fmt.Errorf("decoding DataSource value: %w", err)
+					}
+					if md.FilePath, err = dec.DecodeString(); err != nil {
+						return fmt.Errorf("decoding %q value: %w", md.DataSource, err)
+					}
+				default:
+					return fmt.Errorf("unexpected value code %x for %q", c, key)
+				}
+			case "content_type":
+				switch {
+				case msgpcode.IsString(c):
+					if md.ContentType, err = dec.DecodeString(); err != nil {
+						return fmt.Errorf("decoding ContentType value: %w", err)
+					}
+				case c == msgpcode.Nil:
+					if err = dec.DecodeNil(); err != nil {
+						return err
+					}
+				default:
+					return fmt.Errorf("unexpected value code %x for %q", c, key)
+				}
+			default:
+				return fmt.Errorf("unexpected metadata key %q", key)
+			}
+		}
+		return nil
+	default:
+		return fmt.Errorf("unexpected Value metadata, code %x", c)
+	}
 }

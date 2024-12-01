@@ -89,10 +89,7 @@ func (r *run) EncodeMsgpack(enc *msgpack.Encoder) error {
 	case nil, empty, *empty:
 		return enc.EncodeString("Empty")
 	case Value:
-		if err := encodeMapStart(enc, "Value"); err != nil {
-			return err
-		}
-		return iv.EncodeMsgpack(enc)
+		return (&pipelineValue{V: iv}).EncodeMsgpack(enc)
 	case listStream:
 		if err := encodeMapStart(enc, "ListStream"); err != nil {
 			return err

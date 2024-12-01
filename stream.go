@@ -88,12 +88,6 @@ func (d *data) DecodeMsgpack(dec *msgpack.Decoder) error {
 				return fmt.Errorf("reading raw data: %w", err)
 			}
 		case "Err":
-			if keyName, err = decodeWrapperMap(dec); err != nil {
-				return fmt.Errorf("reading sub-map of Raw: %w", err)
-			}
-			if keyName != "LabeledError" {
-				return fmt.Errorf("unsupported error type %q", keyName)
-			}
 			e := LabeledError{}
 			if err := dec.DecodeValue(reflect.ValueOf(&e)); err != nil {
 				return err
@@ -145,9 +139,6 @@ func encodeLabeledErrorToRawStream(enc *msgpack.Encoder, le *LabeledError) error
 		return err
 	}
 	if err := encodeMapStart(enc, "Err"); err != nil {
-		return err
-	}
-	if err := encodeMapStart(enc, "LabeledError"); err != nil {
 		return err
 	}
 	return enc.EncodeValue(reflect.ValueOf(le))

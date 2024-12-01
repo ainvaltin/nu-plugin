@@ -359,7 +359,7 @@ var _ msgpack.CustomDecoder = (*Value)(nil)
 func (v *Value) DecodeMsgpack(dec *msgpack.Decoder) error {
 	name, err := decodeWrapperMap(dec)
 	if err != nil {
-		return err
+		return fmt.Errorf("decodeWrapperMap: %w", err)
 	}
 	switch name {
 	case "Glob":

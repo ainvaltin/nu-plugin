@@ -31,8 +31,8 @@ func (c Command) Validate() error {
 
 type PluginSignature struct {
 	Name               string         `msgpack:"name"`
-	Usage              string         `msgpack:"usage"`
-	UsageEx            string         `msgpack:"extra_usage"`
+	Usage              string         `msgpack:"description"`
+	UsageEx            string         `msgpack:"extra_description"`
 	SearchTerms        []string       `msgpack:"search_terms"`
 	Category           string         `msgpack:"category"` // https://docs.rs/nu-protocol/latest/nu_protocol/enum.Category.html
 	RequiredPositional PositionalArgs `msgpack:"required_positional"`
