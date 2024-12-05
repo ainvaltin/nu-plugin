@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"mime"
+	"path/filepath"
 	"sync"
 	"sync/atomic"
 )
@@ -152,6 +154,7 @@ type (
 	rawStreamCfg struct {
 		bufSize  uint
 		dataType string // the expected type of the stream
+		md       pipelineMetadata
 		//span     Span
 	}
 	rawStreamOpt struct{ fn func(*rawStreamCfg) }
@@ -182,6 +185,19 @@ and should be treated as a string value. See also [BinaryStream].
 */
 func StringStream() RawStreamOption {
 	return rawStreamOpt{fn: func(rc *rawStreamCfg) { rc.dataType = "String" }}
+}
+
+/*
+FilePath sets the stream metadata to "DataSource = FilePath" with given file name.
+The "content type" field of the metadata is set based on the file's extension
+using system mime type registry.
+*/
+func FilePath(fileName string) RawStreamOption {
+	return rawStreamOpt{fn: func(rc *rawStreamCfg) {
+		rc.md.FilePath = fileName
+		rc.md.DataSource = "FilePath"
+		rc.md.ContentType = mime.TypeByExtension(filepath.Ext(fileName))
+	}}
 }
 
 type commandsInFlight struct {

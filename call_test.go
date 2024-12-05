@@ -10,6 +10,70 @@ import (
 	"github.com/vmihailenco/msgpack/v5"
 )
 
+func Test_pipelineMetadata_DeEncode(t *testing.T) {
+	t.Run("input == output", func(t *testing.T) {
+		testCases := []pipelineMetadata{
+			{DataSource: ""},
+			{DataSource: "None"},
+			{DataSource: "None", ContentType: "application/json"},
+			{DataSource: "Ls"},
+			{DataSource: "FilePath"},
+			{DataSource: "FilePath", FilePath: "/foo/bar.json"},
+			{DataSource: "FilePath", FilePath: "", ContentType: "text/html"},
+			{DataSource: "FilePath", FilePath: "test.html", ContentType: "text/html"},
+		}
+
+		for x, tc := range testCases {
+			bin, err := msgpack.Marshal(&tc)
+			if err != nil {
+				t.Fatalf("[%d] failed to marshal: %v", x, err)
+			}
+			var mdB pipelineMetadata
+			if err := msgpack.Unmarshal(bin, &mdB); err != nil {
+				t.Fatalf("[%d] failed to unmarshal: %v", x, err)
+			}
+			if diff := cmp.Diff(tc, mdB); diff != "" {
+				t.Fatalf("[%d] mismatch (-want +got):\n%s", x, diff)
+			}
+		}
+	})
+
+	t.Run("input != output", func(t *testing.T) {
+		testCases := []struct {
+			in  pipelineMetadata // data to be encoded
+			out pipelineMetadata // what we expect to get after serialization roundtrip
+		}{
+			// FilePath property is only valid (and serialized) when DataSource=="FilePath"
+			{
+				in:  pipelineMetadata{DataSource: "", FilePath: "foo.htm", ContentType: "text/html"},
+				out: pipelineMetadata{DataSource: "", FilePath: "", ContentType: "text/html"},
+			},
+			{
+				in:  pipelineMetadata{DataSource: "Ls", FilePath: "foo.htm", ContentType: "text/html"},
+				out: pipelineMetadata{DataSource: "Ls", FilePath: "", ContentType: "text/html"},
+			},
+			{
+				in:  pipelineMetadata{DataSource: "None", FilePath: "foo.htm", ContentType: "text/html"},
+				out: pipelineMetadata{DataSource: "None", FilePath: "", ContentType: "text/html"},
+			},
+		}
+
+		for x, tc := range testCases {
+			bin, err := msgpack.Marshal(&tc.in)
+			if err != nil {
+				t.Fatalf("[%d] failed to marshal: %v", x, err)
+			}
+			var mdB pipelineMetadata
+			if err := msgpack.Unmarshal(bin, &mdB); err != nil {
+				t.Fatalf("[%d] failed to unmarshal: %v", x, err)
+			}
+			if diff := cmp.Diff(tc.out, mdB); diff != "" {
+				t.Fatalf("[%d] mismatch (-want +got):\n%s", x, diff)
+			}
+		}
+	})
+}
+
 func Test_Call_DeEncode_happy(t *testing.T) {
 	// encode Call as message pack, then decode the binary
 	// and see did we get back (the same) struct

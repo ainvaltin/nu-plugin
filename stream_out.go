@@ -43,7 +43,7 @@ type rawStreamOut struct {
 func (rc *rawStreamOut) streamID() int { return rc.id }
 
 func (rc *rawStreamOut) pipelineDataHdr() any {
-	return &byteStream{ID: rc.id, Type: rc.cfg.dataType}
+	return &byteStream{ID: rc.id, Type: rc.cfg.dataType, MD: rc.cfg.md}
 }
 
 func (rc *rawStreamOut) read() ([]byte, error) {

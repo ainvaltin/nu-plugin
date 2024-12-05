@@ -414,8 +414,43 @@ func (pv *pipelineValue) DecodeMsgpack(dec *msgpack.Decoder) error {
 }
 
 func (md *pipelineMetadata) EncodeMsgpack(enc *msgpack.Encoder) error {
-	// todo: implement serializing when not empty
-	return enc.EncodeNil()
+	if md.DataSource == "" && md.ContentType == "" {
+		return enc.EncodeNil()
+	}
+
+	if err := enc.EncodeMapLen(2); err != nil {
+		return err
+	}
+
+	if err := enc.EncodeString("data_source"); err != nil {
+		return err
+	}
+	switch md.DataSource {
+	case "FilePath":
+		if err := encodeMapStart(enc, "FilePath"); err != nil {
+			return err
+		}
+		if err := enc.EncodeString(md.FilePath); err != nil {
+			return err
+		}
+	default:
+		if err := enc.EncodeString(md.DataSource); err != nil {
+			return err
+		}
+	}
+
+	if err := enc.EncodeString("content_type"); err != nil {
+		return err
+	}
+	if md.ContentType == "" {
+		return enc.EncodeNil()
+	} else {
+		if err := enc.EncodeString(md.ContentType); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (md *pipelineMetadata) DecodeMsgpack(dec *msgpack.Decoder) error {
