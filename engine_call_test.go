@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/ainvaltin/nu-plugin"
+	"github.com/ainvaltin/nu-plugin/syntaxshape"
 )
 
 // example of a command which sends list stream as a input to closure
@@ -16,7 +17,7 @@ func ExampleInputListStream() {
 				nu.PositionalArg{
 					Name:  "closure",
 					Desc:  "Closure to be evaluated",
-					Shape: "Any",
+					Shape: syntaxshape.Closure(),
 				},
 			},
 		},

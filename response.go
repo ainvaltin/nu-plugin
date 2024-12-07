@@ -57,7 +57,10 @@ func (ec *ExecCommand) ReturnValue(ctx context.Context, v Value) error {
 /*
 ReturnListStream should be used when command returns multiple nu.Values.
 
-To signal the end of data chan must be closed.
+When one of the values is [error] engine considers the plugin call to have
+been failed and prints that error message.
+
+To signal the end of data chan must be closed (even when sending error)!
 */
 func (ec *ExecCommand) ReturnListStream(ctx context.Context) (chan<- Value, error) {
 	out := newOutputListValue(ec.p)

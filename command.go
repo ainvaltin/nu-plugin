@@ -6,6 +6,8 @@ import (
 	"reflect"
 
 	"github.com/vmihailenco/msgpack/v5"
+
+	"github.com/ainvaltin/nu-plugin/syntaxshape"
 )
 
 /*
@@ -51,24 +53,27 @@ type PluginSignature struct {
 
 type (
 	PositionalArg struct {
-		Name    string `msgpack:"name"`
-		Desc    string `msgpack:"desc"`
-		Shape   string `msgpack:"shape"` // https://docs.rs/nu-protocol/latest/nu_protocol/enum.SyntaxShape.html
-		VarId   uint   `msgpack:"var_id,omitempty"`
-		Default *Value `msgpack:"default_value,omitempty"`
+		Name    string                  `msgpack:"name"`
+		Desc    string                  `msgpack:"desc"`
+		Shape   syntaxshape.SyntaxShape `msgpack:"shape"`
+		VarId   uint                    `msgpack:"var_id,omitempty"`
+		Default *Value                  `msgpack:"default_value,omitempty"`
 	}
 	PositionalArgs []PositionalArg
 )
 
 type (
+	/*
+		Flag is a definition of a flag (Shape is unassigned) or named argument (Shape assigned).
+	*/
 	Flag struct {
-		Long     string `msgpack:"long"`
-		Short    string `msgpack:"short,omitempty"` // must be single character!
-		Arg      string `msgpack:"arg,omitempty"`   // Option<SyntaxShape>
-		Required bool   `msgpack:"required"`
-		Desc     string `msgpack:"desc"`
-		VarId    uint   `msgpack:"var_id,omitempty"`
-		Default  *Value `msgpack:"default_value,omitempty"`
+		Long     string                  `msgpack:"long"`
+		Short    string                  `msgpack:"short,omitempty"` // must be single character!
+		Shape    syntaxshape.SyntaxShape `msgpack:"arg,omitempty"`
+		Required bool                    `msgpack:"required"`
+		Desc     string                  `msgpack:"desc"`
+		VarId    uint                    `msgpack:"var_id,omitempty"`
+		Default  *Value                  `msgpack:"default_value,omitempty"`
 	}
 	Flags []Flag
 )
