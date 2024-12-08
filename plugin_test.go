@@ -21,7 +21,7 @@ func Test_Plugin_Run(t *testing.T) {
 				Signature: PluginSignature{
 					Name:             "foo bar",
 					Category:         "Experimental",
-					Usage:            "test cmd",
+					Desc:             "test cmd",
 					SearchTerms:      []string{"foo"},
 					InputOutputTypes: [][]string{{"Any", "Any"}},
 				},
@@ -149,7 +149,7 @@ func Test_Plugin_Signature(t *testing.T) {
 				Signature: PluginSignature{
 					Name:             "foo bar",
 					Category:         "Experimental",
-					Usage:            "test cmd",
+					Desc:             "test cmd",
 					SearchTerms:      []string{"foo"},
 					InputOutputTypes: [][]string{{"Any", "Any"}},
 				},
@@ -176,7 +176,7 @@ func Test_Plugin_response(t *testing.T) {
 	signature := PluginSignature{
 		Name:             "inc",
 		Category:         "Experimental",
-		Usage:            "test cmd",
+		Desc:             "test cmd",
 		SearchTerms:      []string{"foo"},
 		InputOutputTypes: [][]string{{"Any", "Any"}},
 	}
@@ -301,7 +301,7 @@ func Test_Plugin_input(t *testing.T) {
 	signature := PluginSignature{
 		Name:             "inc",
 		Category:         "Experimental",
-		Usage:            "test cmd",
+		Desc:             "test cmd",
 		SearchTerms:      []string{"foo"},
 		InputOutputTypes: [][]string{{"Any", "Any"}},
 	}

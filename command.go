@@ -32,9 +32,11 @@ func (c Command) Validate() error {
 }
 
 type PluginSignature struct {
-	Name               string         `msgpack:"name"`
-	Usage              string         `msgpack:"description"`
-	UsageEx            string         `msgpack:"extra_description"`
+	Name string `msgpack:"name"`
+	// This should be a single sentence as it is the part shown for example in the completion menu.
+	Desc string `msgpack:"description"`
+	// Additional documentation of the command.
+	Description        string         `msgpack:"extra_description"`
 	SearchTerms        []string       `msgpack:"search_terms"`
 	Category           string         `msgpack:"category"` // https://docs.rs/nu-protocol/latest/nu_protocol/enum.Category.html
 	RequiredPositional PositionalArgs `msgpack:"required_positional"`
@@ -94,8 +96,8 @@ func (sig PluginSignature) Validate() error {
 	if sig.Category == "" {
 		return fmt.Errorf("command must have Category")
 	}
-	if sig.Usage == "" {
-		return fmt.Errorf("command Usage must have value")
+	if sig.Desc == "" {
+		return fmt.Errorf("command Desc must have value")
 	}
 	if len(sig.SearchTerms) == 0 {
 		return fmt.Errorf("command Search Terms must have value")
