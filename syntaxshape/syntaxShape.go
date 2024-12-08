@@ -29,6 +29,7 @@ type syntaxShape struct {
 	typ     string
 	itmType []SyntaxShape
 	fields  RecordDef
+	data    []byte
 }
 
 func (ss *syntaxShape) EncodeMsgpack(enc *msgpack.Encoder) error {
@@ -78,6 +79,17 @@ func (ss *syntaxShape) encodeMsgpack(enc *msgpack.Encoder) error {
 				return err
 			}
 		}
+	case "Keyword": // Keyword(Vec<u8>, Box<SyntaxShape>)
+		if err := encodeMapStart(enc, "Keyword"); err != nil {
+			return err
+		}
+		if err := enc.EncodeArrayLen(2); err != nil {
+			return err
+		}
+		if err := enc.EncodeBytes(ss.data); err != nil {
+			return err
+		}
+		return ss.itmType[0].encodeMsgpack(enc)
 	case "List": // List(Box<SyntaxShape>)
 		if err := encodeMapStart(enc, "List"); err != nil {
 			return err
@@ -189,6 +201,10 @@ func Int() SyntaxShape {
 
 func ImportPattern() SyntaxShape {
 	return &syntaxShape{typ: "ImportPattern"}
+}
+
+func Keyword(keyword []byte, shape SyntaxShape) SyntaxShape {
+	return &syntaxShape{typ: "Keyword", itmType: []SyntaxShape{shape}, data: keyword}
 }
 
 func List(itemType SyntaxShape) SyntaxShape {

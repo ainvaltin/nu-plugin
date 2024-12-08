@@ -1,4 +1,7 @@
 
+## [unreleased]
+- Implement `Keyword` SyntaxShape;
+
 ## [2024-12-08]
 - Introduce `syntaxshape` package. Until now where SyntaxShape is required `string`
   type was used but that allows only simple syntax shapes to be described.
