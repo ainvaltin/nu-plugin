@@ -43,6 +43,51 @@ type ExecCommand struct {
 }
 
 /*
+FlagValue returns value of named parameter/flag.
+
+The returned bool flag indicates was the flag set by user (true) or
+not (false). When flag was not set by user the default value (defined
+in plugin signature) is returned. When signature doesn't define
+default value (or flag is not defined in the signature) then zero Value
+and false is returned.
+
+For toggle flags (Shape is not assigned in the flag definition) Bool
+Value is always returned ie if user doesn't provide the flag or
+"--flagName=false" is used then Value==false is returned.
+*/
+func (ec *ExecCommand) FlagValue(name string) (Value, bool) {
+	v, ok := ec.Named[name]
+	if ok {
+		// shell doesn't run the command when "value flag" doesn't have
+		// correct value so when value is nil it must be "toggle flag"?
+		if v.Value == nil {
+			return Value{Value: true}, true
+		}
+		// the flag was specified with value - could be toggle flag with
+		// explicit boolean value too
+		return v, true
+	}
+
+	// we need to know is it a "toggle flag" and whats the default
+	cmd := ec.p.cmds[ec.Name]
+	for _, flag := range cmd.Signature.Named {
+		if flag.Long == name {
+			// if it is toggle flag return false
+			if flag.Shape == nil {
+				return Value{Value: false}, false
+			}
+			if flag.Default != nil {
+				return *flag.Default, false
+			}
+			break
+		}
+	}
+
+	// v must be zero value here
+	return v, false
+}
+
+/*
 ReturnValue should be used when command returns single Value.
 */
 func (ec *ExecCommand) ReturnValue(ctx context.Context, v Value) error {
