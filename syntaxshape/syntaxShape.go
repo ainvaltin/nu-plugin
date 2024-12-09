@@ -244,6 +244,9 @@ func Range() SyntaxShape {
 Record describes record type, ie
 
 	Shape: syntaxshape.Record(syntaxshape.RecordDef{"a": syntaxshape.Int(), "b": syntaxshape.String()})
+
+Not providing record definition (ie passing nil) means that all record
+types are accepted.
 */
 func Record(fields RecordDef) SyntaxShape {
 	return &syntaxShape{typ: "Record", fields: fields}

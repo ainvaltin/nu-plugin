@@ -8,6 +8,7 @@ import (
 	"github.com/vmihailenco/msgpack/v5"
 
 	"github.com/ainvaltin/nu-plugin/syntaxshape"
+	"github.com/ainvaltin/nu-plugin/types"
 )
 
 /*
@@ -45,12 +46,17 @@ type PluginSignature struct {
 
 	// The "help" (short "h") flag will be added automatically when plugin
 	// is created, do not use these names for other flags or arguments.
-	Named                Flags      `msgpack:"named"`
-	InputOutputTypes     [][]string `msgpack:"input_output_types"` // https://docs.rs/nu-protocol/latest/nu_protocol/enum.Type.html
-	IsFilter             bool       `msgpack:"is_filter"`
-	CreatesScope         bool       `msgpack:"creates_scope"`
-	AllowsUnknownArgs    bool       `msgpack:"allows_unknown_args"`
-	AllowMissingExamples bool       `msgpack:"allow_variants_without_examples"`
+	Named                Flags        `msgpack:"named"`
+	InputOutputTypes     []InOutTypes `msgpack:"input_output_types"`
+	IsFilter             bool         `msgpack:"is_filter"`
+	CreatesScope         bool         `msgpack:"creates_scope"`
+	AllowsUnknownArgs    bool         `msgpack:"allows_unknown_args"`
+	AllowMissingExamples bool         `msgpack:"allow_variants_without_examples"`
+}
+
+type InOutTypes struct {
+	In  types.Type
+	Out types.Type
 }
 
 type (
@@ -224,4 +230,14 @@ func (ex *Examples) EncodeMsgpack(enc *msgpack.Encoder) error {
 		}
 	}
 	return nil
+}
+
+func (iot *InOutTypes) EncodeMsgpack(enc *msgpack.Encoder) error {
+	if err := enc.EncodeArrayLen(2); err != nil {
+		return err
+	}
+	if err := iot.In.EncodeMsgpack(enc); err != nil {
+		return err
+	}
+	return iot.Out.EncodeMsgpack(enc)
 }

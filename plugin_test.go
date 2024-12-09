@@ -12,6 +12,8 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/vmihailenco/msgpack/v5"
+
+	"github.com/ainvaltin/nu-plugin/types"
 )
 
 func Test_Plugin_Run(t *testing.T) {
@@ -23,7 +25,7 @@ func Test_Plugin_Run(t *testing.T) {
 					Category:         "Experimental",
 					Desc:             "test cmd",
 					SearchTerms:      []string{"foo"},
-					InputOutputTypes: [][]string{{"Any", "Any"}},
+					InputOutputTypes: []InOutTypes{{types.Any(), types.Any()}},
 				},
 				OnRun: func(ctx context.Context, exec *ExecCommand) error {
 					return nil
@@ -151,7 +153,7 @@ func Test_Plugin_Signature(t *testing.T) {
 					Category:         "Experimental",
 					Desc:             "test cmd",
 					SearchTerms:      []string{"foo"},
-					InputOutputTypes: [][]string{{"Any", "Any"}},
+					InputOutputTypes: []InOutTypes{{types.Any(), types.Any()}},
 				},
 				OnRun: func(ctx context.Context, exec *ExecCommand) error {
 					return nil
@@ -178,7 +180,7 @@ func Test_Plugin_response(t *testing.T) {
 		Category:         "Experimental",
 		Desc:             "test cmd",
 		SearchTerms:      []string{"foo"},
-		InputOutputTypes: [][]string{{"Any", "Any"}},
+		InputOutputTypes: []InOutTypes{{types.Any(), types.Any()}},
 	}
 
 	t.Run("Error response", func(t *testing.T) {
@@ -303,7 +305,7 @@ func Test_Plugin_input(t *testing.T) {
 		Category:         "Experimental",
 		Desc:             "test cmd",
 		SearchTerms:      []string{"foo"},
-		InputOutputTypes: [][]string{{"Any", "Any"}},
+		InputOutputTypes: []InOutTypes{{types.Any(), types.Any()}},
 	}
 
 	t.Run("Empty input", func(t *testing.T) {

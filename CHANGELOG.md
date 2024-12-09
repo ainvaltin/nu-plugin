@@ -1,6 +1,8 @@
 
-## [unreleased]
+## [2024-12-09]
 - Implement `Keyword` SyntaxShape;
+- Introduce `types` package - to define input / output types of the plugin.
+  The `PluginSignature` field `InputOutputTypes` is now `[]InOutTypes`.
 
 ## [2024-12-08]
 - Introduce `syntaxshape` package. Until now where SyntaxShape is required `string`
