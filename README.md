@@ -25,6 +25,6 @@ Nushell [protocol](https://www.nushell.sh/contributor-book/plugin_protocol_refer
 - CustomValueOp
 
 ### Unsupported Values
-- Range
+- Range (partially, Int ranges are supported, Float ranges are not)
 - CellPath
 - Custom

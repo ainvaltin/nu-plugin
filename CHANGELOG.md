@@ -1,6 +1,8 @@
 
-## []
+## [2024-12-29]
+- Plugin protocol version 0.101.0
 - Implement Stringer for IntRange;
+- Implement iterator for `IntRange`. Minimum supported Go version is now 1.23.
 
 ## [2024-12-09]
 - Implement `Keyword` SyntaxShape;

@@ -1,7 +1,10 @@
 package nu
 
 import (
+	"errors"
 	"fmt"
+	"iter"
+	"math"
 
 	"github.com/vmihailenco/msgpack/v5"
 	"github.com/vmihailenco/msgpack/v5/msgpcode"
@@ -10,13 +13,33 @@ import (
 type RangeBound uint8
 
 const (
-	Unbounded RangeBound = 0
-	Included  RangeBound = 1
-	Excluded  RangeBound = 2
+	Included  RangeBound = 0
+	Excluded  RangeBound = 1
+	Unbounded RangeBound = 2
 )
 
+func (rb RangeBound) String() string {
+	switch rb {
+	case Included:
+		return "Included"
+	case Excluded:
+		return "Excluded"
+	case Unbounded:
+		return "Unbounded"
+	default:
+		return fmt.Sprintf("RangeBound(%d)", int(rb))
+	}
+}
+
 /*
-IntRange is IntRange variant of [Nushell Range] type.
+IntRange is the IntRange variant of [Nushell Range] type.
+
+When creating IntRange manually don't forget to assign Step as range with
+zero stride would be invalid.
+
+Bound defaults to "included" which is also default in Nushell.
+
+To iterate over values in the range use [IntRange.All] method.
 
 [Nushell Range]: https://www.nushell.sh/contributor-book/plugin_protocol_reference.html#range
 */
@@ -38,9 +61,95 @@ func (v *IntRange) String() string {
 	return fmt.Sprintf("%d..%d..%s", v.Start, v.Start+v.Step, s)
 }
 
+func (v IntRange) Validate() error {
+	// should we check that End == 0 for Unbounded?
+	switch {
+	case v.Step > 0:
+		if v.Bound != Unbounded && v.Start > v.End {
+			return fmt.Errorf("start value must be smaller than end value, got %d..%d (step %d)", v.Start, v.End, v.Step)
+		}
+	case v.Step < 0:
+		if v.Bound != Unbounded && v.Start <= v.End {
+			return fmt.Errorf("start value must be greater than end value, got %d..%d (step %d)", v.Start, v.End, v.Step)
+		}
+	default:
+		return errors.New("step must be non-zero")
+	}
+
+	return nil
+}
+
+/*
+All generates all the values in the Range.
+
+Invalid range doesn't generate any values.
+*/
+func (v IntRange) All() iter.Seq[int64] {
+	switch {
+	case v.Step > 0:
+		return v.countUp()
+	case v.Step < 0:
+		return v.countDown()
+	default:
+		// one can manually construct invalid range where step == 0
+		return func(yield func(int64) bool) {}
+	}
+}
+
+func add(a, b int64) (int64, bool) {
+	c := a + b
+	return c, (c > a) == (b > 0)
+}
+
+func (v *IntRange) countUp() iter.Seq[int64] {
+	return func(yield func(int64) bool) {
+		var end int64
+		switch v.Bound {
+		case Unbounded:
+			// 9223372036854775806..
+			// returns just two values, ie it does not wrap over on overflow
+			end = math.MaxInt64
+		case Included:
+			end = v.End
+		case Excluded:
+			end = v.End - 1
+		}
+
+		for i, ok := v.Start, true; i <= end && ok; i, ok = add(i, v.Step) {
+			if !yield(i) {
+				return
+			}
+		}
+	}
+}
+
+func (v *IntRange) countDown() iter.Seq[int64] {
+	return func(yield func(int64) bool) {
+		var end int64
+		switch v.Bound {
+		case Unbounded:
+			end = math.MinInt64
+		case Included:
+			end = v.End
+		case Excluded:
+			end = v.End + 1
+		}
+
+		for i, ok := v.Start, true; i >= end && ok; i, ok = add(i, v.Step) {
+			if !yield(i) {
+				return
+			}
+		}
+	}
+}
+
 var _ msgpack.CustomEncoder = (*IntRange)(nil)
 
 func (v *IntRange) EncodeMsgpack(enc *msgpack.Encoder) error {
+	if err := v.Validate(); err != nil {
+		return fmt.Errorf("invalid IntRange definition: %w", err)
+	}
+
 	if err := encodeMapStart(enc, "IntRange"); err != nil {
 		return err
 	}
@@ -155,6 +264,7 @@ func (v *IntRange) DecodeMsgpack(dec *msgpack.Decoder) error {
 			return fmt.Errorf("decode field %q: %w", fieldName, err)
 		}
 	}
+	// validate? or we trust engine to send correct data?
 	return nil
 }
 
