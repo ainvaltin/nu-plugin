@@ -42,7 +42,7 @@ func (cr *engineCallResponse) DecodeMsgpack(dec *msgpack.Decoder) (err error) {
 	case "ValueMap":
 		m := map[string]Value{}
 		if err = dec.DecodeValue(reflect.ValueOf(&m)); err != nil {
-			return err
+			return fmt.Errorf("decoding ValueMap of EngineCallResponse: %w", err)
 		}
 		cr.Response = m
 	case "Config":

@@ -3,6 +3,8 @@
 - Plugin protocol version 0.101.0
 - Implement Stringer for IntRange;
 - Implement iterator for `IntRange`. Minimum supported Go version is now 1.23.
+- Fix loading empty list. Caused ie `GetEnvVar` or `GetEnvVars` call to fail
+  when some env var contained empty list value.
 
 ## [2024-12-09]
 - Implement `Keyword` SyntaxShape;

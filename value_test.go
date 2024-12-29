@@ -44,6 +44,7 @@ func Test_Value_DeEncode(t *testing.T) {
 		{in: Value{Value: 11 * time.Minute}, out: Value{Value: 11 * time.Minute}},
 		{in: Value{Value: time.Date(2024, 05, 25, 14, 55, 06, 0, time.UTC)}, out: Value{Value: time.Date(2024, 05, 25, 14, 55, 06, 0, time.UTC)}},
 		{in: Value{Value: Record{"foo": Value{Value: "bar"}, "int": Value{Value: 12}}}, out: Value{Value: Record{"foo": Value{Value: "bar"}, "int": Value{Value: int64(12)}}}},
+		{in: Value{Value: []Value{}}, out: Value{Value: []Value{}}},
 		{in: Value{Value: []Value{{Value: "first"}, {Value: 13}}}, out: Value{Value: []Value{{Value: "first"}, {Value: int64(13)}}}},
 		{in: Value{Value: fmt.Errorf("oops")}, out: Value{Value: LabeledError{Msg: "oops"}}},
 		{in: Value{Value: Closure{BlockID: 8}}, out: Value{Value: Closure{BlockID: 8}}},

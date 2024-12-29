@@ -435,9 +435,6 @@ func (v *Value) decodeValue(dec *msgpack.Decoder, typeName string) error {
 			if err != nil {
 				return err
 			}
-			if cnt < 1 {
-				return nil
-			}
 			lst := make([]Value, cnt)
 			for i := 0; i < cnt; i++ {
 				if err := lst[i].DecodeMsgpack(dec); err != nil {
