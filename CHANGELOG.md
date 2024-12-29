@@ -1,4 +1,7 @@
 
+## []
+- Implement Stringer for IntRange;
+
 ## [2024-12-09]
 - Implement `Keyword` SyntaxShape;
 - Introduce `types` package - to define input / output types of the plugin.

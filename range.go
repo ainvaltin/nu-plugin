@@ -27,6 +27,17 @@ type IntRange struct {
 	Bound RangeBound // end bound kind of the range
 }
 
+func (v *IntRange) String() string {
+	s := ""
+	switch v.Bound {
+	case Included:
+		s = fmt.Sprintf("%d", v.End)
+	case Excluded:
+		s = fmt.Sprintf("<%d", v.End)
+	}
+	return fmt.Sprintf("%d..%d..%s", v.Start, v.Start+v.Step, s)
+}
+
 var _ msgpack.CustomEncoder = (*IntRange)(nil)
 
 func (v *IntRange) EncodeMsgpack(enc *msgpack.Encoder) error {

@@ -8,6 +8,28 @@ import (
 	"github.com/vmihailenco/msgpack/v5"
 )
 
+func Test_IntRange_String(t *testing.T) {
+	var testCases = []struct {
+		r IntRange
+		s string
+	}{
+		{r: IntRange{}, s: "0..0.."},
+		{r: IntRange{Start: 0, Step: 1, End: 1, Bound: Included}, s: "0..1..1"},
+		{r: IntRange{Start: 0, Step: 1, End: 1, Bound: Excluded}, s: "0..1..<1"},
+		{r: IntRange{Start: 0, Step: -1, End: -1, Bound: Included}, s: "0..-1..-1"},
+		{r: IntRange{Start: 0, Step: -1, End: -1, Bound: Excluded}, s: "0..-1..<-1"},
+		{r: IntRange{Start: 8, Step: 5, End: 0, Bound: Unbounded}, s: "8..13.."},
+		{r: IntRange{Start: -10, Step: -5, End: -15, Bound: Included}, s: "-10..-15..-15"},
+		{r: IntRange{Start: -10, Step: 5, End: 15, Bound: Excluded}, s: "-10..-5..<15"},
+	}
+
+	for x, tc := range testCases {
+		if diff := cmp.Diff(tc.r.String(), tc.s); diff != "" {
+			t.Errorf("[%d] String mismatch (-expected +got):\n%s", x, diff)
+		}
+	}
+}
+
 func Test_IntRange_EndBound(t *testing.T) {
 	t.Run("input equals output", func(t *testing.T) {
 		// cases where encode - decode sycle results in
