@@ -1,3 +1,8 @@
+/*
+Package syntaxshape defines type and functions to describe Nu syntax shapes.
+
+It is used by the [github.com/ainvaltin/nu-plugin] to define Plugin signature.
+*/
 package syntaxshape
 
 import (

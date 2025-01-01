@@ -236,9 +236,19 @@ func Test_IntRange_Iterator(t *testing.T) {
 }
 
 func ExampleIntRange() {
-	rng := IntRange{Start: -1, Step: 2, End: 5, Bound: Excluded}
+	var values []int64
+	// end bound defaults to Included
+	rng := IntRange{Start: -1, Step: 2, End: 5}
 	for v := range rng.All() {
-		fmt.Printf("%d ", v)
+		values = append(values, v)
 	}
-	// Output: -1 1 3
+	fmt.Printf("Included: %v\n", values)
+
+	// exclude end bound
+	rng.Bound = Excluded
+	values = slices.Collect(rng.All())
+	fmt.Printf("Excluded: %v\n", values)
+	// Output:
+	// Included: [-1 1 3 5]
+	// Excluded: [-1 1 3]
 }
