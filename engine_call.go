@@ -45,6 +45,10 @@ func (cr *engineCallResponse) DecodeMsgpack(dec *msgpack.Decoder) (err error) {
 			return fmt.Errorf("decoding ValueMap of EngineCallResponse: %w", err)
 		}
 		cr.Response = m
+	case "Identifier":
+		if cr.Response, err = dec.DecodeUint(); err != nil {
+			return fmt.Errorf("decoding Identifier response: %w", err)
+		}
 	case "Config":
 		m, err := dec.DecodeMap()
 		if err != nil {
@@ -278,22 +282,25 @@ func (ec *ExecCommand) engineCallValueReturn(ctx context.Context, arg any) (*Val
 }
 
 /*
-EvalClosure engine call.
+EvalClosure implements [EvalClosure engine call].
 
-Pass a [Closure] and arguments to the engine to be evaluated. Returned value follows
-the same rules as Input field of the [ExecCommand] (ie it could be nil, Value or
-stream).
+Pass a [Closure] and optional arguments to the engine to be evaluated. Returned
+value follows the same rules as Input field of the [ExecCommand] (ie it could
+be nil, Value or stream).
+
+[EvalClosure engine call]: https://www.nushell.sh/contributor-book/plugin_protocol_reference.html#evalclosure-engine-call
 */
-func (ec *ExecCommand) EvalClosure(ctx context.Context, closure Value, args ...EvalClosureArgument) (any, error) {
+func (ec *ExecCommand) EvalClosure(ctx context.Context, closure Value, args ...EvalArgument) (any, error) {
 	if _, ok := closure.Value.(Closure); !ok {
-		return nil, fmt.Errorf("closure value must be of type Closure, got %T", closure.Value)
+		return nil, fmt.Errorf("closure argument must be of type Closure, got %T", closure.Value)
 	}
 
-	cfg := &evalClosure{p: ec.p, closure: closure, input: empty{}, run: func(context.Context) {}}
-	for _, opt := range args {
-		if err := opt.apply(cfg); err != nil {
-			return nil, fmt.Errorf("invalid Closure argument: %w", err)
-		}
+	cfg, err := newEvalArguments(ec.p, args)
+	if err != nil {
+		return nil, fmt.Errorf("init evaluation config: %w", err)
+	}
+	if len(cfg.named) > 0 {
+		return nil, fmt.Errorf("closures don't support NamedParameters")
 	}
 
 	go cfg.run(ctx)
@@ -301,7 +308,7 @@ func (ec *ExecCommand) EvalClosure(ctx context.Context, closure Value, args ...E
 	type param struct {
 		Call *evalClosure `msgpack:"EvalClosure"`
 	}
-	ch, err := ec.p.engineCall(ctx, ec.callID, param{cfg})
+	ch, err := ec.p.engineCall(ctx, ec.callID, param{&evalClosure{closure: closure, cfg: cfg}})
 	if err != nil {
 		return nil, fmt.Errorf("engine call: %w", err)
 	}
@@ -315,14 +322,8 @@ func (ec *ExecCommand) EvalClosure(ctx context.Context, closure Value, args ...E
 }
 
 type evalClosure struct {
-	closure         Value   `msgpack:"closure"`
-	positional      []Value `msgpack:"positional"`
-	input           any     `msgpack:"input"`
-	redirect_stdout bool    `msgpack:"redirect_stdout"`
-	redirect_stderr bool    `msgpack:"redirect_stderr"`
-
-	p   *Plugin
-	run func(ctx context.Context)
+	closure Value
+	cfg     *evalArguments
 }
 
 var _ msgpack.CustomEncoder = (*evalClosure)(nil)
@@ -356,66 +357,194 @@ func (ec *evalClosure) EncodeMsgpack(enc *msgpack.Encoder) error {
 	if err := enc.EncodeString("positional"); err != nil {
 		return err
 	}
-	if err := enc.EncodeArrayLen(len(ec.positional)); err != nil {
+	if err := enc.EncodeArrayLen(len(ec.cfg.positional)); err != nil {
 		return err
 	}
-	for x, v := range ec.positional {
+	for x, v := range ec.cfg.positional {
 		if err := v.EncodeMsgpack(enc); err != nil {
 			return fmt.Errorf("encoding positional argument [%d]: %w", x, err)
 		}
 	}
 
+	return ec.cfg.encodeCommonFields(enc)
+}
+
+// ErrDeclNotFound is returned by the [ExecCommand.FindDeclaration] method if the
+// command with the given name couldn't be found in the scope of the plugin call.
+var ErrDeclNotFound = errors.New("command not found")
+
+/*
+FindDeclaration implements [FindDecl engine call].
+
+Returns [ErrDeclNotFound] if the command with the given name couldn't be found
+in the scope of the plugin call (NB! use [errors.Is] to check for the error as
+it might be wrapped into more descriptive error).
+
+In case of success the returned Declaration can be used to call the command.
+
+[FindDecl engine call]: https://www.nushell.sh/contributor-book/plugin_protocol_reference.html#finddecl-engine-call
+*/
+func (ec *ExecCommand) FindDeclaration(ctx context.Context, name string) (*Declaration, error) {
+	type param struct {
+		Name string `msgpack:"FindDecl"`
+	}
+	ch, err := ec.p.engineCall(ctx, ec.callID, param{Name: name})
+	if err != nil {
+		return nil, fmt.Errorf("engine call: %w", err)
+	}
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case v := <-ch:
+		switch tv := v.(type) {
+		case nil, empty:
+			return nil, fmt.Errorf("%q: %w", name, ErrDeclNotFound)
+		case uint:
+			return &Declaration{id: tv, ec: ec}, nil
+		default:
+			return nil, fmt.Errorf("unexpected return value of type %T", tv)
+		}
+	}
+}
+
+/*
+Declaration represents Nu command which can be called from plugin.
+Use [ExecCommand.FindDeclaration] to obtain the Declaration.
+*/
+type Declaration struct {
+	id uint
+	ec *ExecCommand
+}
+
+/*
+Call implements [CallDecl engine call]. Use [ExecCommand.FindDeclaration] to
+obtain the Declaration.
+
+Note that [NamedParams] can be used as argument of Call in addition to the
+[Positional], [InputValue] and other [EvalArgument]s.
+
+[CallDecl engine call]: https://www.nushell.sh/contributor-book/plugin_protocol_reference.html#calldecl-engine-call
+*/
+func (d Declaration) Call(ctx context.Context, args ...EvalArgument) (any, error) {
+	cfg, err := newEvalArguments(d.ec.p, args)
+	if err != nil {
+		return nil, fmt.Errorf("init evaluation config: %w", err)
+	}
+	go cfg.run(ctx)
+
+	type param struct {
+		Call *callDecl `msgpack:"CallDecl"`
+	}
+	ch, err := d.ec.p.engineCall(ctx, d.ec.callID, param{&callDecl{d.id, cfg}})
+	if err != nil {
+		return nil, fmt.Errorf("engine call: %w", err)
+	}
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case v := <-ch:
+		return d.ec.p.getInput(ctx, v)
+	}
+}
+
+type callDecl struct {
+	decl_id uint //	The ID of the declaration to call.
+	cfg     *evalArguments
+}
+
+func (cd *callDecl) EncodeMsgpack(enc *msgpack.Encoder) error {
+	if err := enc.EncodeMapLen(5); err != nil {
+		return err
+	}
+
+	// the ID of the declaration to call
+	if err := enc.EncodeString("decl_id"); err != nil {
+		return err
+	}
+	if err := enc.EncodeUint(uint64(cd.decl_id)); err != nil {
+		return err
+	}
+
+	if err := enc.EncodeString("call"); err != nil {
+		return err
+	}
+	call := evaluatedCall{Positional: cd.cfg.positional, Named: cd.cfg.named}
+	if err := enc.EncodeValue(reflect.ValueOf(&call)); err != nil {
+		return err
+	}
+
+	return cd.cfg.encodeCommonFields(enc)
+}
+
+type (
+	// EvalArgument is type for [ExecCommand.EvalClosure] and [Declaration.Call] optional arguments.
+	EvalArgument interface {
+		apply(*evalArguments) error
+	}
+
+	evalArgument struct{ fn func(*evalArguments) error }
+
+	evalArguments struct {
+		named           NamedParams
+		positional      []Value
+		input           any
+		redirect_stdout bool
+		redirect_stderr bool
+
+		p   *Plugin
+		run func(ctx context.Context)
+	}
+)
+
+func (opt evalArgument) apply(cfg *evalArguments) error { return opt.fn(cfg) }
+
+func newEvalArguments(p *Plugin, args []EvalArgument) (*evalArguments, error) {
+	cfg := &evalArguments{p: p, run: func(context.Context) {}, input: empty{}}
+	for _, opt := range args {
+		if err := opt.apply(cfg); err != nil {
+			return nil, fmt.Errorf("invalid argument: %w", err)
+		}
+	}
+	return cfg, nil
+}
+
+func (args *evalArguments) encodeCommonFields(enc *msgpack.Encoder) error {
 	if err := enc.EncodeString("input"); err != nil {
 		return err
 	}
-	if err := encodePipelineDataHeader(enc, ec.input); err != nil {
-		return err
+	if err := encodePipelineDataHeader(enc, args.input); err != nil {
+		return fmt.Errorf("encode input: %w", err)
 	}
 
 	if err := enc.EncodeString("redirect_stdout"); err != nil {
 		return err
 	}
-	if err := enc.EncodeBool(ec.redirect_stdout); err != nil {
+	if err := enc.EncodeBool(args.redirect_stdout); err != nil {
 		return err
 	}
 
 	if err := enc.EncodeString("redirect_stderr"); err != nil {
 		return err
 	}
-	if err := enc.EncodeBool(ec.redirect_stderr); err != nil {
+	if err := enc.EncodeBool(args.redirect_stderr); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (ec *evalClosure) setInput(arg any) error {
-	if _, ok := ec.input.(empty); !ok {
-		return fmt.Errorf("the Input parameter has already been set to %T", ec.input)
+func (args *evalArguments) setInput(arg any) error {
+	if _, ok := args.input.(empty); !ok {
+		return fmt.Errorf("the Input parameter has already been set to %T", args.input)
 	}
 
-	ec.input = arg
+	args.input = arg
 	return nil
 }
 
-type (
-	/*
-		EvalClosureArgument is type for [ExecCommand.EvalClosure] optional arguments.
-
-		https://www.nushell.sh/contributor-book/plugin_protocol_reference.html#evalclosure-engine-call
-	*/
-	EvalClosureArgument interface {
-		apply(*evalClosure) error
-	}
-
-	evalClosureArgument struct{ fn func(*evalClosure) error }
-)
-
-func (opt evalClosureArgument) apply(cfg *evalClosure) error { return opt.fn(cfg) }
-
-// Positional arguments for the closure.
-func Positional(args ...Value) EvalClosureArgument {
-	return evalClosureArgument{fn: func(ec *evalClosure) error {
+// Positional arguments for the call.
+func Positional(args ...Value) EvalArgument {
+	return evalArgument{fn: func(ec *evalArguments) error {
 		if ec.positional != nil {
 			return errors.New("positional arguments have already been set")
 		}
@@ -424,15 +553,15 @@ func Positional(args ...Value) EvalClosureArgument {
 	}}
 }
 
-// InputValue allows to set single-value input for the closure.
-func InputValue(arg Value) EvalClosureArgument {
-	return evalClosureArgument{fn: func(ec *evalClosure) error { return ec.setInput(arg) }}
+// InputValue allows to set single-value input for the call.
+func InputValue(arg Value) EvalArgument {
+	return evalArgument{fn: func(ec *evalArguments) error { return ec.setInput(arg) }}
 }
 
-func InputListStream(arg <-chan Value) EvalClosureArgument {
-	return evalClosureArgument{fn: func(ec *evalClosure) error {
+func InputListStream(arg <-chan Value) EvalArgument {
+	return evalArgument{fn: func(ec *evalArguments) error {
 		out := newOutputListValue(ec.p)
-		if err := ec.setInput(&listStream{ID: out.id, Span: ec.closure.Span}); err != nil {
+		if err := ec.setInput(&listStream{ID: out.id}); err != nil {
 			return err
 		}
 		ec.run = func(ctx context.Context) {
@@ -453,10 +582,10 @@ func InputListStream(arg <-chan Value) EvalClosureArgument {
 	}}
 }
 
-func InputRawStream(arg io.Reader) EvalClosureArgument {
-	return evalClosureArgument{fn: func(ec *evalClosure) error {
+func InputRawStream(arg io.Reader) EvalArgument {
+	return evalArgument{fn: func(ec *evalArguments) error {
 		out := newOutputListRaw(ec.p)
-		if err := ec.setInput(&byteStream{ID: out.id, Span: ec.closure.Span, Type: "Unknown"}); err != nil {
+		if err := ec.setInput(&byteStream{ID: out.id, Type: "Unknown"}); err != nil {
 			return err
 		}
 		ec.run = func(ctx context.Context) {
@@ -470,10 +599,20 @@ func InputRawStream(arg io.Reader) EvalClosureArgument {
 	}}
 }
 
-func RedirectStdout() EvalClosureArgument {
-	return evalClosureArgument{fn: func(ec *evalClosure) error { ec.redirect_stdout = true; return nil }}
+/*
+Whether to redirect stdout if the declared command ends in an external command.
+
+Default is "false", this argument sets it to "true".
+*/
+func RedirectStdout() EvalArgument {
+	return evalArgument{fn: func(ec *evalArguments) error { ec.redirect_stdout = true; return nil }}
 }
 
-func RedirectStderr() EvalClosureArgument {
-	return evalClosureArgument{fn: func(ec *evalClosure) error { ec.redirect_stderr = true; return nil }}
+/*
+Whether to redirect stderr if the declared command ends in an external command.
+
+Default is "false", this argument sets it to "true".
+*/
+func RedirectStderr() EvalArgument {
+	return evalArgument{fn: func(ec *evalArguments) error { ec.redirect_stderr = true; return nil }}
 }

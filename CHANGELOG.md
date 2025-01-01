@@ -1,4 +1,9 @@
 
+## [2025-01-01]
+- Implement `FindDecl` and `CallDecl` engine calls.
+  Renamed `EvalClosureArgument` to `EvalArgument` as it is now used for both
+  `EvalClosure` and `CallDecl`.
+
 ## [2024-12-29]
 - Plugin protocol version 0.101.0
 - Implement Stringer for IntRange;

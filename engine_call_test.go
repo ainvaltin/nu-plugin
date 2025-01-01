@@ -57,3 +57,26 @@ func ExampleInputListStream() {
 		},
 	}
 }
+
+func ExampleDeclaration_Call() {
+	// command's OnRun handler
+	_ = func(ctx context.Context, call *nu.ExecCommand) error {
+		// find the builtin "into int" command (Conversions)
+		dec, err := call.FindDeclaration(ctx, "into int")
+		if err != nil {
+			return err
+		}
+		// following call is the same as executing
+		// 'FF' | into int --radix 16
+		response, err := dec.Call(ctx, nu.InputValue(nu.Value{Value: "FF"}), nu.NamedParams{"radix": nu.Value{Value: 16}})
+		if err != nil {
+			return err
+		}
+		switch data := response.(type) {
+		case nu.Value:
+			return call.ReturnValue(ctx, data)
+		default:
+			return fmt.Errorf("unsupported return type %#v", response)
+		}
+	}
+}

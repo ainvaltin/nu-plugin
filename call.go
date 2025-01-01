@@ -28,10 +28,12 @@ type (
 	}
 
 	evaluatedCall struct {
-		Head       Span        `msgpack:"head"`
-		Positional []Value     `msgpack:"positional"`
-		Named      NamedParams `msgpack:"named"`
+		Head       Span             `msgpack:"head"`
+		Positional positionalParams `msgpack:"positional"`
+		Named      NamedParams      `msgpack:"named"`
 	}
+
+	positionalParams []Value
 
 	NamedParams map[string]Value
 
@@ -204,8 +206,8 @@ func decodePipelineDataHeader(dec *msgpack.Decoder) (any, error) {
 
 func encodePipelineDataHeader(enc *msgpack.Encoder, data any) error {
 	switch dt := data.(type) {
-	case *Value:
-		return (&pipelineValue{V: *dt}).EncodeMsgpack(enc)
+	case Value:
+		return (&pipelineValue{V: dt}).EncodeMsgpack(enc)
 	case *listStream:
 		if err := encodeMapStart(enc, "ListStream"); err != nil {
 			return err
@@ -221,6 +223,51 @@ func encodePipelineDataHeader(enc *msgpack.Encoder, data any) error {
 	default:
 		return fmt.Errorf("unsupported PipelineDataHeader type %T", dt)
 	}
+}
+
+func (pp *positionalParams) EncodeMsgpack(enc *msgpack.Encoder) error {
+	if pp == nil || len(*pp) == 0 {
+		return enc.EncodeArrayLen(0)
+	}
+
+	if err := enc.EncodeArrayLen(len(*pp)); err != nil {
+		return err
+	}
+	for _, v := range *pp {
+		if err := v.EncodeMsgpack(enc); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// to implement EvalArgument
+func (np NamedParams) apply(cfg *evalArguments) error { cfg.named = np; return nil }
+
+var _ msgpack.CustomEncoder = (*NamedParams)(nil)
+
+func (np *NamedParams) EncodeMsgpack(enc *msgpack.Encoder) error {
+	if np == nil || len(*np) == 0 {
+		return enc.EncodeArrayLen(0)
+	}
+
+	if err := enc.EncodeArrayLen(len(*np)); err != nil {
+		return err
+	}
+	var parName npName
+	for name, v := range *np {
+		if err := enc.EncodeArrayLen(2); err != nil {
+			return err
+		}
+		parName.Name = name
+		if err := enc.EncodeValue(reflect.ValueOf(&parName)); err != nil {
+			return fmt.Errorf("writing named params [%s] key: %w", name, err)
+		}
+		if err := v.EncodeMsgpack(enc); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 var _ msgpack.CustomDecoder = (*NamedParams)(nil)

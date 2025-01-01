@@ -83,8 +83,7 @@ func Test_Call_DeEncode_happy(t *testing.T) {
 		{ID: 0, Call: run{Name: "inc", Input: Value{Value: int64(2), Span: Span{Start: 9090, End: 9093}}, Call: evaluatedCall{Head: Span{Start: 40400, End: 40403}, Positional: []Value{}, Named: NamedParams{}}}},
 		{ID: 0, Call: run{Name: "inc", Input: listStream{ID: 2}, Call: evaluatedCall{Head: Span{Start: 40400, End: 40403}, Positional: []Value{}, Named: NamedParams{}}}},
 		{ID: 2, Call: run{Name: "inc", Input: empty{}, Call: evaluatedCall{Head: Span{Start: 40400, End: 40403}, Positional: []Value{{Value: "0.1.2", Span: Span{Start: 40407, End: 40415}}}, Named: NamedParams{}}}},
-		// named params encoding differs when sent to plugin (compared to when plugin sends it's signature)... should implement as different types!
-		//{ID: 2, Call: run{Name: "inc", Call: evaluatedCall{Head: Span{Start: 40400, End: 40403}, Positional: []Value{{Value: "0.1.2", Span: Span{Start: 40407, End: 40415}}}, Named: NamedParams{"major": Value{Value: true, Span: Span{Start: 40404, End: 40406}}}}}},
+		{ID: 2, Call: run{Name: "inc", Input: empty{}, Call: evaluatedCall{Head: Span{Start: 40400, End: 40403}, Positional: []Value{{Value: "0.1.2", Span: Span{Start: 40407, End: 40415}}}, Named: NamedParams{"major": Value{Value: true, Span: Span{Start: 40404, End: 40406}}}}}},
 	}
 
 	for x, tc := range testCases {
@@ -192,23 +191,6 @@ func (cr *callResponse) DecodeMsgpack(dec *msgpack.Decoder) (err error) {
 		cr.Response = e
 	default:
 		return fmt.Errorf("unexpected CallResponse key %q", name)
-	}
-	return nil
-}
-
-var _ msgpack.CustomEncoder = (*NamedParams)(nil)
-
-func (np *NamedParams) EncodeMsgpack(enc *msgpack.Encoder) error {
-	if np == nil || len(*np) == 0 {
-		return enc.EncodeArrayLen(0)
-	}
-	if err := enc.EncodeArrayLen(len(*np)); err != nil {
-		return err
-	}
-	for _, v := range *np {
-		if err := enc.EncodeValue(reflect.ValueOf(&v)); err != nil {
-			return err
-		}
 	}
 	return nil
 }

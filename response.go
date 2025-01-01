@@ -95,7 +95,7 @@ func (ec *ExecCommand) ReturnValue(ctx context.Context, v Value) error {
 		return fmt.Errorf("response has been already sent")
 	}
 
-	rsp := callResponse{ID: ec.callID, Response: &pipelineData{Data: &v}}
+	rsp := callResponse{ID: ec.callID, Response: &pipelineData{Data: v}}
 	return ec.p.outputMsg(ctx, &rsp)
 }
 
@@ -164,7 +164,7 @@ func (ec *ExecCommand) returnNothing(ctx context.Context) error {
 func (ec *ExecCommand) returnError(ctx context.Context, callErr error) error {
 	out := ec.output.Load()
 	switch s := out.(type) {
-	case nil, *Value:
+	case nil, *Value, Value:
 		// if we have already sent the Value response, will this get through?!
 		if err := ec.p.outputMsg(ctx, &callResponse{ID: ec.callID, Response: callErr}); err != nil {
 			return fmt.Errorf("sending error response to a Call: %w", err)

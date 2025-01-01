@@ -18,8 +18,6 @@ Nushell [protocol](https://www.nushell.sh/contributor-book/plugin_protocol_refer
 
 ### Unsupported Engine Calls
 - GetConfig
-- FindDecl
-- CallDecl
 
 ### Unsupported Plugin Calls
 - CustomValueOp
