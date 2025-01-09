@@ -217,7 +217,13 @@ func (v *Value) EncodeMsgpack(enc *msgpack.Encoder) error {
 		if err := startValue(enc, "Binary"); err != nil {
 			return err
 		}
-		err = enc.EncodeBytes(tv)
+		// EncodeBytes encodes nil slice as NIL but Nu doesn't like it:
+		// Plugin failed to decode: invalid type: unit value, expected a sequence
+		if tv == nil {
+			err = enc.EncodeBytesLen(0)
+		} else {
+			err = enc.EncodeBytes(tv)
+		}
 	case Record:
 		if err := startValue(enc, "Record"); err != nil {
 			return err
