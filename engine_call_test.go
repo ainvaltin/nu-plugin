@@ -22,7 +22,7 @@ func ExampleInputListStream() {
 			},
 		},
 		Examples: nu.Examples{
-			{Description: `Closure which adds +1 to each item in input stream and returns stream`, Example: `demo { each {|n| $n + 1} }`},
+			{Description: `Closure which adds +1 to each item in input stream and returns stream`, Example: `demo { $in | each {|n| $n + 1} }`},
 		},
 
 		OnRun: func(ctx context.Context, call *nu.ExecCommand) error {

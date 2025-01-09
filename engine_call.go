@@ -303,8 +303,6 @@ func (ec *ExecCommand) EvalClosure(ctx context.Context, closure Value, args ...E
 		return nil, fmt.Errorf("closures don't support NamedParameters")
 	}
 
-	go cfg.run(ctx)
-
 	type param struct {
 		Call *evalClosure `msgpack:"EvalClosure"`
 	}
@@ -312,6 +310,8 @@ func (ec *ExecCommand) EvalClosure(ctx context.Context, closure Value, args ...E
 	if err != nil {
 		return nil, fmt.Errorf("engine call: %w", err)
 	}
+
+	go cfg.run(ctx)
 
 	select {
 	case <-ctx.Done():
@@ -430,7 +430,6 @@ func (d Declaration) Call(ctx context.Context, args ...EvalArgument) (any, error
 	if err != nil {
 		return nil, fmt.Errorf("init evaluation config: %w", err)
 	}
-	go cfg.run(ctx)
 
 	type param struct {
 		Call *callDecl `msgpack:"CallDecl"`
@@ -439,6 +438,9 @@ func (d Declaration) Call(ctx context.Context, args ...EvalArgument) (any, error
 	if err != nil {
 		return nil, fmt.Errorf("engine call: %w", err)
 	}
+
+	go cfg.run(ctx)
+
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
