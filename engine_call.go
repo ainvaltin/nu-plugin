@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"reflect"
-	"syscall"
 
 	"github.com/vmihailenco/msgpack/v5"
 )
@@ -221,7 +220,7 @@ func (ec *ExecCommand) EnterForeground(ctx context.Context) error {
 	if !ok {
 		return fmt.Errorf("expected pgid to be int, got %T", v.Value)
 	}
-	return syscall.Setpgid(syscall.Getpid(), int(pgid))
+	return enterForeground(pgid)
 }
 
 /*
