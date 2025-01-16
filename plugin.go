@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"runtime"
 	"sync"
 	"sync/atomic"
 
@@ -115,7 +116,7 @@ message, the ctx was cancelled or unrecoverable error happened).
 func (p *Plugin) Run(ctx context.Context) error {
 	// send encoding type and Hello
 	p.outputRaw(ctx, []byte(format_mpack))
-	h := hello{Protocol: protocol_name, Version: protocol_version, Features: features{LocalSocket: true}}
+	h := hello{Protocol: protocol_name, Version: protocol_version, Features: features{LocalSocket: runtime.GOOS != "windows"}}
 	if err := p.outputMsg(ctx, &h); err != nil {
 		return fmt.Errorf("sending Hello: %w", err)
 	}
