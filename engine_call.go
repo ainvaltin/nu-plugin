@@ -206,36 +206,38 @@ system-defined manner. This should be called when the plugin is going to drive t
 terminal in raw mode, for example to implement a terminal UI.
 
 This call will fail with an error if the plugin is already in the foreground.
-The plugin should call LeaveForeground when it no longer needs to be in the foreground.
+
+The plugin should call the function returned by this method when it no longer needs
+to be in the foreground. The returned function implements the LeaveForeground method.
+
+Note that the plugin will also automatically be removed from the foreground when the
+plugin call response is received, even if the plugin call returns a stream.
 */
-func (ec *ExecCommand) EnterForeground(ctx context.Context) error {
+func (ec *ExecCommand) EnterForeground(ctx context.Context) (func(context.Context) error, error) {
 	v, err := ec.engineCallValueReturn(ctx, "EnterForeground")
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if v == nil {
-		return nil
+		return ec.leaveForeground(false), nil
 	}
-	pgid, ok := v.Value.(int64)
-	if !ok {
-		return fmt.Errorf("expected pgid to be int, got %T", v.Value)
-	}
-	return enterForeground(pgid)
+	return ec.leaveForeground(true), enterForeground(*v)
 }
 
-/*
-LeaveForeground engine call - resets the state set by EnterForeground.
-*/
-func (ec *ExecCommand) LeaveForeground(ctx context.Context) error {
-	v, err := ec.engineCallValueReturn(ctx, "LeaveForeground")
-	if err != nil {
-		return err
+func (ec *ExecCommand) leaveForeground(resetPgid bool) func(context.Context) error {
+	return func(ctx context.Context) error {
+		v, err := ec.engineCallValueReturn(ctx, "LeaveForeground")
+		if err != nil {
+			return fmt.Errorf("calling LeaveForeground: %w", err)
+		}
+		if v != nil {
+			return fmt.Errorf("unexpected non-empty response: %v", v.Value)
+		}
+		if resetPgid {
+			return leaveForeground()
+		}
+		return nil
 	}
-	if v != nil {
-		return fmt.Errorf("unexpected non-empty response: %v", v.Value)
-	}
-	// TODO: if EnterForeground called Setpgid we should call Setpgid(0) here?
-	return nil
 }
 
 /*

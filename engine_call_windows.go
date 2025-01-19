@@ -9,6 +9,10 @@ setpgid() in order to be in the foreground.
 
 ie it seems that on non-Unix systems we should do nothing.
 */
-func enterForeground(_ int64) error {
+func enterForeground(_ Value) error {
+	return nil
+}
+
+func leaveForeground() error {
 	return nil
 }
