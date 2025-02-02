@@ -207,8 +207,8 @@ terminal in raw mode, for example to implement a terminal UI.
 
 This call will fail with an error if the plugin is already in the foreground.
 
-The plugin should call the function returned by this method when it no longer needs
-to be in the foreground. The returned function implements the LeaveForeground method.
+The returned function implements the LeaveForeground method and the plugin should
+call it when it no longer needs to be in the foreground.
 
 Note that the plugin will also automatically be removed from the foreground when the
 plugin call response is received, even if the plugin call returns a stream.

@@ -1,4 +1,10 @@
 
+## [2025-02-02]
+- `ToValue` helper function.
+- Fix nil byte slice encoding.
+- Fix stream input for engine call (`EvalClosure`, `CallDecl`).
+- Fix Windows support.
+
 ## [2025-01-01]
 - Implement `FindDecl` and `CallDecl` engine calls.
   Renamed `EvalClosureArgument` to `EvalArgument` as it is now used for both
@@ -6,7 +12,7 @@
 
 ## [2024-12-29]
 - Plugin protocol version 0.101.0
-- Implement Stringer for IntRange;
+- Implement `Stringer` for `IntRange`;
 - Implement iterator for `IntRange`. Minimum supported Go version is now 1.23.
 - Fix loading empty list. Caused ie `GetEnvVar` or `GetEnvVars` call to fail
   when some env var contained empty list value.

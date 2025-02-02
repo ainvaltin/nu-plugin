@@ -77,7 +77,9 @@ func (ec *ExecCommand) FlagValue(name string) (Value, bool) {
 				return Value{Value: false}, false
 			}
 			if flag.Default != nil {
-				return *flag.Default, false
+				// use ToValue as ie default defined as "nu.Value{Value: 1}"
+				// has a type "int" but canonical value would be "int64"
+				return ToValue(flag.Default.Value), false
 			}
 			break
 		}
