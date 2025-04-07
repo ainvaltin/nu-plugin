@@ -85,5 +85,5 @@ const (
 	format_mpack = "\x07msgpack"
 
 	protocol_name    = "nu-plugin"
-	protocol_version = "0.102.0"
+	protocol_version = "0.103.0"
 )
