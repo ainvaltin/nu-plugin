@@ -10,14 +10,12 @@ using [Go](https://go.dev/).
 ## Status
 
 WIP. Good enough to write simple plugins.
-See [example project](https://github.com/ainvaltin/nu_plugin_plist) which implements 
-commands to convert to/from plist and encode/decode base85.
 
 Nushell [protocol](https://www.nushell.sh/contributor-book/plugin_protocol_reference.html)
 `0.103.0`. Only message pack encoding is supported.
 
 ### Unsupported Engine Calls
-- GetConfig
+- GetConfig - the config struct type is moving target.
 
 ### Unsupported Plugin Calls
 - CustomValueOp
@@ -26,3 +24,7 @@ Nushell [protocol](https://www.nushell.sh/contributor-book/plugin_protocol_refer
 - Range (partially, Int ranges are supported, Float ranges are not)
 - CellPath
 - Custom
+
+### Example plugins
+- [convert between formats](https://github.com/ainvaltin/nu_plugin_plist) like plist, base58, base85.
+- [bolt database](https://github.com/ainvaltin/nu_plugin_boltdb) operations.

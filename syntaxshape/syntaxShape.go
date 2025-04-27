@@ -153,7 +153,7 @@ func CellPath() SyntaxShape {
 }
 
 func Closure(args ...SyntaxShape) SyntaxShape {
-	return &syntaxShape{typ: "Closure"}
+	return &syntaxShape{typ: "Closure", itmType: args}
 }
 
 func DateTime() SyntaxShape {
