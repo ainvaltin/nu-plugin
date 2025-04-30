@@ -12,7 +12,7 @@ using [Go](https://go.dev/).
 WIP. Good enough to write simple plugins.
 
 Nushell [protocol](https://www.nushell.sh/contributor-book/plugin_protocol_reference.html)
-`0.103.0`. Only message pack encoding is supported.
+`0.104.0`. Only message pack encoding is supported.
 
 ### Unsupported Engine Calls
 - GetConfig - the config struct type is moving target.
