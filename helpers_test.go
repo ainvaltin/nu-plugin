@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"reflect"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -51,7 +50,7 @@ func PluginResponse(ctx context.Context, p *Plugin, msg any) ([]byte, error) {
 /*
 Parses all nu-plugin-protocol messages (both server and client).
 */
-func decodeNuMsgAll(next func(d *msgpack.Decoder, name string) (_ interface{}, err error)) func(*msgpack.Decoder) (interface{}, error) {
+func decodeNuMsgAll(p *Plugin, next func(d *msgpack.Decoder, name string) (_ interface{}, err error)) func(*msgpack.Decoder) (interface{}, error) {
 	return func(dec *msgpack.Decoder) (interface{}, error) {
 		name, err := decodeWrapperMap(dec)
 		if err != nil {
@@ -60,10 +59,10 @@ func decodeNuMsgAll(next func(d *msgpack.Decoder, name string) (_ interface{}, e
 		switch name {
 		case "CallResponse":
 			cr := callResponse{}
-			return cr, dec.DecodeValue(reflect.ValueOf(&cr))
+			return cr, cr.decodeMsgpack(dec, p)
 		case "PipelineData":
 			cr := pipelineData{}
-			return cr, dec.DecodeValue(reflect.ValueOf(&cr))
+			return cr, cr.DecodeMsgpack(dec, p)
 		default:
 			return next(dec, name)
 		}

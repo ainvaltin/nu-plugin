@@ -86,16 +86,18 @@ func Test_Call_DeEncode_happy(t *testing.T) {
 		{ID: 2, Call: run{Name: "inc", Input: empty{}, Call: evaluatedCall{Head: Span{Start: 40400, End: 40403}, Positional: []Value{{Value: "0.1.2", Span: Span{Start: 40407, End: 40415}}}, Named: NamedParams{"major": Value{Value: true, Span: Span{Start: 40404, End: 40406}}}}}},
 	}
 
+	p := Plugin{}
+
 	for x, tc := range testCases {
-		bin, err := msgpack.Marshal(&tc)
+		bin, err := p.serialize(&tc)
 		if err != nil {
 			t.Errorf("[%d] encoding %#v: %v", x, tc, err)
 			continue
 		}
 
 		dec := msgpack.NewDecoder(bytes.NewBuffer(bin))
-		dec.SetMapDecoder(decodeInputMsg)
-		dv, err := dec.DecodeInterface()
+		dec.SetMapDecoder(decodeNuMsgAll(&p, p.handleMsgDecode))
+		dv, err := p.decodeInputMsg(dec)
 		if err != nil {
 			t.Errorf("[%d] decoding %#v: %v", x, tc, err)
 			continue
@@ -107,9 +109,7 @@ func Test_Call_DeEncode_happy(t *testing.T) {
 	}
 }
 
-var _ msgpack.CustomEncoder = (*call)(nil)
-
-func (c *call) EncodeMsgpack(enc *msgpack.Encoder) error {
+func (c *call) encodeMsgpack(enc *msgpack.Encoder, p *Plugin) error {
 	if err := encodeTupleInMap(enc, "Call", c.ID); err != nil {
 		return err
 	}
@@ -120,15 +120,13 @@ func (c *call) EncodeMsgpack(enc *msgpack.Encoder) error {
 		if err := encodeMapStart(enc, "Run"); err != nil {
 			return err
 		}
-		return enc.EncodeValue(reflect.ValueOf(&mt))
+		return mt.encodeMsgpack(enc, p)
 	default:
 		return fmt.Errorf("unsupported Call type %T", mt)
 	}
 }
 
-var _ msgpack.CustomEncoder = (*run)(nil)
-
-func (r *run) EncodeMsgpack(enc *msgpack.Encoder) error {
+func (r *run) encodeMsgpack(enc *msgpack.Encoder, p *Plugin) error {
 	if err := enc.EncodeMapLen(3); err != nil {
 		return err
 	}
@@ -141,7 +139,7 @@ func (r *run) EncodeMsgpack(enc *msgpack.Encoder) error {
 	if err := enc.EncodeString("call"); err != nil {
 		return err
 	}
-	if err := enc.EncodeValue(reflect.ValueOf(&r.Call)); err != nil {
+	if err := r.Call.encodeMsgpack(enc, p); err != nil {
 		return err
 	}
 	if err := enc.EncodeString("input"); err != nil {
@@ -152,7 +150,7 @@ func (r *run) EncodeMsgpack(enc *msgpack.Encoder) error {
 	case nil, empty, *empty:
 		return enc.EncodeString("Empty")
 	case Value:
-		return (&pipelineValue{V: iv}).EncodeMsgpack(enc)
+		return (&pipelineValue{V: iv}).encodeMsgpack(enc, p)
 	case listStream:
 		if err := encodeMapStart(enc, "ListStream"); err != nil {
 			return err
@@ -166,9 +164,32 @@ func (r *run) EncodeMsgpack(enc *msgpack.Encoder) error {
 	}
 }
 
-var _ msgpack.CustomDecoder = (*callResponse)(nil)
+func (ec *evaluatedCall) encodeMsgpack(enc *msgpack.Encoder, p *Plugin) error {
+	if err := enc.EncodeMapLen(3); err != nil {
+		return fmt.Errorf("writing evaluatedCall map length: %w", err)
+	}
+	if err := enc.EncodeString("head"); err != nil {
+		return err
+	}
+	if err := enc.EncodeValue(reflect.ValueOf(&ec.Head)); err != nil {
+		return err
+	}
+	if err := enc.EncodeString("positional"); err != nil {
+		return err
+	}
+	if err := ec.Positional.encodeMsgpack(enc, p); err != nil {
+		return err
+	}
+	if err := enc.EncodeString("named"); err != nil {
+		return err
+	}
+	if err := ec.Named.encodeMsgpack(enc, p); err != nil {
+		return err
+	}
+	return nil
+}
 
-func (cr *callResponse) DecodeMsgpack(dec *msgpack.Decoder) (err error) {
+func (cr *callResponse) decodeMsgpack(dec *msgpack.Decoder, p *Plugin) (err error) {
 	if cr.ID, err = decodeTupleStart(dec); err != nil {
 		return fmt.Errorf("decoding CallResponse tuple: %w", err)
 	}
@@ -179,7 +200,7 @@ func (cr *callResponse) DecodeMsgpack(dec *msgpack.Decoder) (err error) {
 	switch name {
 	case "PipelineData":
 		pd := pipelineData{}
-		if err := pd.DecodeMsgpack(dec); err != nil {
+		if err := pd.DecodeMsgpack(dec, p); err != nil {
 			return err
 		}
 		cr.Response = pd

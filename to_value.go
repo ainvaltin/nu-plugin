@@ -71,6 +71,8 @@ func ToValue(v any) Value {
 		return Value{Value: v}
 	case error:
 		return Value{Value: v}
+	case CustomValue:
+		return Value{Value: v}
 	case Value:
 		return t
 	default:

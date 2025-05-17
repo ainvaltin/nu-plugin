@@ -456,7 +456,7 @@ func runEngine(t *testing.T, p *Plugin, msg []msgDef) {
 		}()
 
 		dec := msgpack.NewDecoder(engineIn)
-		dec.SetMapDecoder(decodeNuMsgAll(handleMsgDecode))
+		dec.SetMapDecoder(decodeNuMsgAll(p, p.handleMsgDecode))
 
 		for k, v := range msg {
 			if v.recv != nil {
@@ -468,7 +468,7 @@ func runEngine(t *testing.T, p *Plugin, msg []msgDef) {
 					errch <- fmt.Errorf("[%d] message mismatch (-want +got):\n%s", k, diff)
 				}
 			} else {
-				buf, err := v.msgBytes()
+				buf, err := v.msgBytes(p)
 				if err != nil {
 					errch <- fmt.Errorf("encoding message [%d]: %w", k, err)
 				}
@@ -508,7 +508,7 @@ type msgDef struct {
 /*
 msgBytes returns the message described by the def as bytes.
 */
-func (md msgDef) msgBytes() ([]byte, error) {
+func (md msgDef) msgBytes(p *Plugin) ([]byte, error) {
 	var msg any
 	switch {
 	case md.recv != nil:
@@ -516,7 +516,7 @@ func (md msgDef) msgBytes() ([]byte, error) {
 	case md.send != nil:
 		msg = md.send
 	}
-	buf, err := msgpack.Marshal(msg)
+	buf, err := p.serialize(msg)
 	if err != nil {
 		return nil, fmt.Errorf("encoding msg as MessagePack: %v", err)
 	}

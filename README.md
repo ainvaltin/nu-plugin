@@ -15,16 +15,15 @@ Nushell [protocol](https://www.nushell.sh/contributor-book/plugin_protocol_refer
 `0.104.0`. Only message pack encoding is supported.
 
 ### Unsupported Engine Calls
-- GetConfig - the config struct type is moving target.
-
-### Unsupported Plugin Calls
-- CustomValueOp
+- GetConfig - the config struct type is a moving target.
 
 ### Unsupported Values
 - Range (partially, Int ranges are supported, Float ranges are not)
 - CellPath
-- Custom
 
 ### Example plugins
+
+Example projects outside this repository, ie not those in the examples directory:
+
 - [convert between formats](https://github.com/ainvaltin/nu_plugin_plist) like plist, base58, base85.
 - [bolt database](https://github.com/ainvaltin/nu_plugin_boltdb) operations.

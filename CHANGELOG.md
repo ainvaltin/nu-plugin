@@ -1,4 +1,9 @@
 
+## [2025-05-17]
+- Plugin protocol version 0.104.0
+- Fix: SyntaxShape `Closure` didn't preserve argument type(s).
+- New: Custom Value support.
+
 ## [2025-02-02]
 - `ToValue` helper function.
 - Fix nil byte slice encoding.

@@ -15,11 +15,11 @@ import (
 Command describes an command provided by the plugin.
 */
 type Command struct {
-	Signature PluginSignature `msgpack:"sig"`
-	Examples  Examples        `msgpack:"examples"`
+	Signature PluginSignature
+	Examples  Examples
 
 	// callback executed on command invocation
-	OnRun func(context.Context, *ExecCommand) error `msgpack:"-"`
+	OnRun func(context.Context, *ExecCommand) error
 }
 
 func (c Command) Validate() error {
@@ -32,26 +32,126 @@ func (c Command) Validate() error {
 	return nil
 }
 
+func (c Command) encodeMsgpack(enc *msgpack.Encoder, p *Plugin) (err error) {
+	if err = enc.EncodeMapLen(2); err != nil {
+		return err
+	}
+	if err = enc.EncodeString("sig"); err != nil {
+		return err
+	}
+	if err = c.Signature.encodeMsgpack(enc, p); err != nil {
+		return err
+	}
+	if err = enc.EncodeString("examples"); err != nil {
+		return err
+	}
+	return c.Examples.encodeMsgpack(enc, p)
+}
+
 type PluginSignature struct {
-	Name string `msgpack:"name"`
+	Name string
 	// This should be a single sentence as it is the part shown for example in the completion menu.
-	Desc string `msgpack:"description"`
+	Desc string
 	// Additional documentation of the command.
-	Description        string         `msgpack:"extra_description"`
-	SearchTerms        []string       `msgpack:"search_terms"`
-	Category           string         `msgpack:"category"` // https://docs.rs/nu-protocol/latest/nu_protocol/enum.Category.html
-	RequiredPositional PositionalArgs `msgpack:"required_positional"`
-	OptionalPositional PositionalArgs `msgpack:"optional_positional,"`
-	RestPositional     *PositionalArg `msgpack:"rest_positional,omitempty"`
+	Description        string
+	SearchTerms        []string
+	Category           string // https://docs.rs/nu-protocol/latest/nu_protocol/enum.Category.html
+	RequiredPositional PositionalArgs
+	OptionalPositional PositionalArgs
+	RestPositional     *PositionalArg
 
 	// The "help" (short "h") flag will be added automatically when plugin
 	// is created, do not use these names for other flags or arguments.
-	Named                Flags        `msgpack:"named"`
-	InputOutputTypes     []InOutTypes `msgpack:"input_output_types"`
-	IsFilter             bool         `msgpack:"is_filter"`
-	CreatesScope         bool         `msgpack:"creates_scope"`
-	AllowsUnknownArgs    bool         `msgpack:"allows_unknown_args"`
-	AllowMissingExamples bool         `msgpack:"allow_variants_without_examples"`
+	Named                Flags
+	InputOutputTypes     []InOutTypes
+	IsFilter             bool
+	CreatesScope         bool
+	AllowsUnknownArgs    bool
+	AllowMissingExamples bool
+}
+
+func (sig PluginSignature) encodeMsgpack(enc *msgpack.Encoder, p *Plugin) (err error) {
+	cnt := 13 + bval(sig.RestPositional != nil)
+	if err = enc.EncodeMapLen(cnt); err != nil {
+		return err
+	}
+
+	if err = encodeString(enc, "name", sig.Name); err != nil {
+		return err
+	}
+	if err = encodeString(enc, "description", sig.Desc); err != nil {
+		return err
+	}
+	if err = encodeString(enc, "extra_description", sig.Description); err != nil {
+		return err
+	}
+	if err = encodeString(enc, "category", sig.Category); err != nil {
+		return err
+	}
+
+	if err = enc.EncodeString("search_terms"); err != nil {
+		return err
+	}
+	if err = enc.EncodeArrayLen(len(sig.SearchTerms)); err != nil {
+		return err
+	}
+	for _, v := range sig.SearchTerms {
+		if err = enc.EncodeString(v); err != nil {
+			return err
+		}
+	}
+
+	if err = enc.EncodeString("required_positional"); err != nil {
+		return err
+	}
+	if err = sig.RequiredPositional.encodeMsgpack(enc, p); err != nil {
+		return err
+	}
+	if err = enc.EncodeString("optional_positional"); err != nil {
+		return err
+	}
+	if err = sig.OptionalPositional.encodeMsgpack(enc, p); err != nil {
+		return err
+	}
+	if sig.RestPositional != nil {
+		if err = enc.EncodeString("rest_positional"); err != nil {
+			return err
+		}
+		if err = sig.RestPositional.encodeMsgpack(enc, p); err != nil {
+			return err
+		}
+	}
+
+	if err = enc.EncodeString("named"); err != nil {
+		return err
+	}
+	if err = sig.Named.encodeMsgpack(enc, p); err != nil {
+		return err
+	}
+	if err = enc.EncodeString("input_output_types"); err != nil {
+		return err
+	}
+	if err = enc.EncodeArrayLen(len(sig.InputOutputTypes)); err != nil {
+		return err
+	}
+	for _, v := range sig.InputOutputTypes {
+		if err = v.encodeMsgpack(enc); err != nil {
+			return err
+		}
+	}
+	if err = encodeBoolean(enc, "is_filter", sig.IsFilter); err != nil {
+		return err
+	}
+	if err = encodeBoolean(enc, "creates_scope", sig.CreatesScope); err != nil {
+		return err
+	}
+	if err = encodeBoolean(enc, "allows_unknown_args", sig.AllowsUnknownArgs); err != nil {
+		return err
+	}
+	if err = encodeBoolean(enc, "allow_variants_without_examples", sig.AllowMissingExamples); err != nil {
+		return err
+	}
+	return nil
 }
 
 type InOutTypes struct {
@@ -72,25 +172,25 @@ type (
 
 type (
 	/*
-		Flag is a definition of a flag (Shape is unassigned) or named argument (Shape assigned).
+		Flag is a definition of a flag (Shape is unassigned) or named argument (Shape is assigned).
 	*/
 	Flag struct {
-		Long     string                  `msgpack:"long"`
-		Short    string                  `msgpack:"short,omitempty"` // must be single character!
-		Shape    syntaxshape.SyntaxShape `msgpack:"arg,omitempty"`
-		Required bool                    `msgpack:"required"`
-		Desc     string                  `msgpack:"desc"`
-		VarId    uint                    `msgpack:"var_id,omitempty"`
-		Default  *Value                  `msgpack:"default_value,omitempty"`
+		Long     string
+		Short    string // optional, must be single character!
+		Shape    syntaxshape.SyntaxShape
+		Required bool
+		Desc     string
+		VarId    uint
+		Default  *Value
 	}
 	Flags []Flag
 )
 
 type (
 	Example struct {
-		Example     string `msgpack:"example"`
-		Description string `msgpack:"description"`
-		Result      *Value `msgpack:"result,omitempty"`
+		Example     string
+		Description string
+		Result      *Value
 	}
 	Examples []Example
 )
@@ -118,21 +218,21 @@ func (sig PluginSignature) Validate() error {
 /*
 Decode top-level "plugin input" message, the message must be "map".
 */
-func decodeInputMsg(dec *msgpack.Decoder) (interface{}, error) {
+func (p *Plugin) decodeInputMsg(dec *msgpack.Decoder) (interface{}, error) {
 	name, err := decodeWrapperMap(dec)
 	if err != nil {
 		return nil, fmt.Errorf("decode message's map: %w", err)
 	}
-	return handleMsgDecode(dec, name)
+	return p.handleMsgDecode(dec, name)
 }
 
-func handleMsgDecode(dec *msgpack.Decoder, name string) (_ interface{}, err error) {
+func (p *Plugin) handleMsgDecode(dec *msgpack.Decoder, name string) (_ any, err error) {
 	switch name {
 	case "Call":
-		return decodeCall(dec)
+		return decodeCall(dec, p)
 	case "Data":
 		m := data{}
-		return m, m.DecodeMsgpack(dec)
+		return m, m.decodeMsgpack(dec, p)
 	case "Ack":
 		m := ack{}
 		m.ID, err = dec.DecodeInt()
@@ -147,7 +247,7 @@ func handleMsgDecode(dec *msgpack.Decoder, name string) (_ interface{}, err erro
 		return m, err
 	case "EngineCallResponse":
 		m := engineCallResponse{}
-		return m, m.DecodeMsgpack(dec)
+		return m, m.decodeMsgpack(dec, p)
 	case "Hello":
 		m := hello{}
 		return m, dec.DecodeValue(reflect.ValueOf(&m))
@@ -162,9 +262,7 @@ func handleMsgDecode(dec *msgpack.Decoder, name string) (_ interface{}, err erro
 	}
 }
 
-var _ msgpack.CustomEncoder = (*PositionalArgs)(nil)
-
-func (pa *PositionalArgs) EncodeMsgpack(enc *msgpack.Encoder) error {
+func (pa *PositionalArgs) encodeMsgpack(enc *msgpack.Encoder, p *Plugin) error {
 	if pa == nil || len(*pa) == 0 {
 		return enc.EncodeArrayLen(0)
 	}
@@ -172,16 +270,98 @@ func (pa *PositionalArgs) EncodeMsgpack(enc *msgpack.Encoder) error {
 		return err
 	}
 	for _, v := range *pa {
-		if err := enc.EncodeValue(reflect.ValueOf(&v)); err != nil {
+		if err := v.encodeMsgpack(enc, p); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-var _ msgpack.CustomEncoder = (*Flags)(nil)
+func (pa *PositionalArg) encodeMsgpack(enc *msgpack.Encoder, p *Plugin) (err error) {
+	cnt := 3 + bval(pa.VarId != 0) + bval(pa.Default != nil)
+	if err = enc.EncodeMapLen(cnt); err != nil {
+		return err
+	}
 
-func (flags *Flags) EncodeMsgpack(enc *msgpack.Encoder) error {
+	if err = encodeString(enc, "name", pa.Name); err != nil {
+		return err
+	}
+	if err = encodeString(enc, "desc", pa.Desc); err != nil {
+		return err
+	}
+	if err = enc.EncodeString("shape"); err != nil {
+		return err
+	}
+	if err = pa.Shape.EncodeMsgpack(enc); err != nil {
+		return err
+	}
+	if pa.VarId != 0 {
+		if err = enc.EncodeString("var_id"); err != nil {
+			return err
+		}
+		if err = enc.EncodeUint(uint64(pa.VarId)); err != nil {
+			return err
+		}
+	}
+	if pa.Default != nil {
+		if err = enc.EncodeString("default_value"); err != nil {
+			return err
+		}
+		if err = pa.Default.encodeMsgpack(enc, p); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (flag *Flag) encodeMsgpack(enc *msgpack.Encoder, p *Plugin) (err error) {
+	cnt := 3 + bval(flag.Short != "") + bval(flag.Shape != nil) + bval(flag.VarId != 0) + bval(flag.Default != nil)
+	if err = enc.EncodeMapLen(cnt); err != nil {
+		return err
+	}
+
+	if err = encodeString(enc, "long", flag.Long); err != nil {
+		return err
+	}
+	if flag.Short != "" {
+		if err = encodeString(enc, "short", flag.Short); err != nil {
+			return err
+		}
+	}
+	if err = encodeString(enc, "desc", flag.Desc); err != nil {
+		return err
+	}
+	if err = encodeBoolean(enc, "required", flag.Required); err != nil {
+		return err
+	}
+	if flag.Shape != nil {
+		if err = enc.EncodeString("arg"); err != nil {
+			return err
+		}
+		if err = flag.Shape.EncodeMsgpack(enc); err != nil {
+			return err
+		}
+	}
+	if flag.VarId != 0 {
+		if err = enc.EncodeString("var_id"); err != nil {
+			return err
+		}
+		if err = enc.EncodeUint(uint64(flag.VarId)); err != nil {
+			return err
+		}
+	}
+	if flag.Default != nil {
+		if err = enc.EncodeString("default_value"); err != nil {
+			return err
+		}
+		if err = flag.Default.encodeMsgpack(enc, p); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (flags *Flags) encodeMsgpack(enc *msgpack.Encoder, p *Plugin) error {
 	if flags == nil || len(*flags) == 0 {
 		return enc.EncodeArrayLen(0)
 	}
@@ -189,7 +369,7 @@ func (flags *Flags) EncodeMsgpack(enc *msgpack.Encoder) error {
 		return err
 	}
 	for _, v := range *flags {
-		if err := enc.EncodeValue(reflect.ValueOf(&v)); err != nil {
+		if err := v.encodeMsgpack(enc, p); err != nil {
 			return err
 		}
 	}
@@ -215,9 +395,7 @@ func (flags *Flags) Validate() error {
 	return nil
 }
 
-var _ msgpack.CustomEncoder = (*Examples)(nil)
-
-func (ex *Examples) EncodeMsgpack(enc *msgpack.Encoder) error {
+func (ex *Examples) encodeMsgpack(enc *msgpack.Encoder, p *Plugin) error {
 	if ex == nil || len(*ex) == 0 {
 		return enc.EncodeArrayLen(0)
 	}
@@ -225,14 +403,34 @@ func (ex *Examples) EncodeMsgpack(enc *msgpack.Encoder) error {
 		return err
 	}
 	for _, v := range *ex {
-		if err := enc.EncodeValue(reflect.ValueOf(&v)); err != nil {
+		if err := v.encodeMsgpack(enc, p); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (iot *InOutTypes) EncodeMsgpack(enc *msgpack.Encoder) error {
+func (ex *Example) encodeMsgpack(enc *msgpack.Encoder, p *Plugin) (err error) {
+	cnt := 2 + bval(ex.Result != nil)
+	if err = enc.EncodeMapLen(cnt); err != nil {
+		return err
+	}
+	if err = encodeString(enc, "description", ex.Description); err != nil {
+		return err
+	}
+	if err = encodeString(enc, "example", ex.Example); err != nil {
+		return err
+	}
+	if ex.Result != nil {
+		if err = enc.EncodeString("result"); err != nil {
+			return err
+		}
+		return ex.Result.encodeMsgpack(enc, p)
+	}
+	return nil
+}
+
+func (iot *InOutTypes) encodeMsgpack(enc *msgpack.Encoder) error {
 	if err := enc.EncodeArrayLen(2); err != nil {
 		return err
 	}

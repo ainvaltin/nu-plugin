@@ -61,6 +61,7 @@ Outgoing values are encoded as:
   - [Block] -> Block
   - [IntRange] -> Range
   - error -> LabeledError
+  - [CustomValue] -> Custom
 
 [Nushell Value]: https://www.nushell.sh/contributor-book/plugin_protocol_reference.html#value-types
 */
@@ -119,9 +120,7 @@ Block is Nushell [Block Value] type.
 */
 type Block uint64
 
-var _ msgpack.CustomEncoder = (*Value)(nil)
-
-func (v *Value) EncodeMsgpack(enc *msgpack.Encoder) error {
+func (v *Value) encodeMsgpack(enc *msgpack.Encoder, p *Plugin) error {
 	err := enc.EncodeMapLen(1)
 	if err != nil {
 		return err
@@ -235,12 +234,12 @@ func (v *Value) EncodeMsgpack(enc *msgpack.Encoder) error {
 			if err := enc.EncodeString(k); err != nil {
 				return err
 			}
-			if err := enc.EncodeValue(reflect.ValueOf(&v)); err != nil {
+			if err := v.encodeMsgpack(enc, p); err != nil {
 				return err
 			}
 		}
 	case []Value:
-		err = encodeValueList(enc, tv)
+		err = encodeValueList(enc, tv, p)
 	case Closure:
 		if err := startValue(enc, "Closure"); err != nil {
 			return err
@@ -269,11 +268,19 @@ func (v *Value) EncodeMsgpack(enc *msgpack.Encoder) error {
 		if err := enc.EncodeMapLen(1); err != nil {
 			return err
 		}
+	case CustomValue:
+		if err := startValue(enc, "Custom"); err != nil {
+			return err
+		}
+		id := p.idGen.Add(1)
+		if err = encodeCustomValue(enc, id, tv); err == nil {
+			p.cvals[id] = tv
+		}
 	default:
 		return fmt.Errorf("unsupported Value type %T", tv)
 	}
 	if err != nil {
-		return fmt.Errorf("encoding %T Value", v.Value)
+		return fmt.Errorf("encoding %T Value: %w", v.Value, err)
 	}
 
 	if err := enc.EncodeString("span"); err != nil {
@@ -303,7 +310,7 @@ func startValue(enc *msgpack.Encoder, typeName string) error {
 	return enc.EncodeString("val")
 }
 
-func encodeValueList(enc *msgpack.Encoder, items []Value) error {
+func encodeValueList(enc *msgpack.Encoder, items []Value, p *Plugin) error {
 	if err := enc.EncodeString("List"); err != nil {
 		return err
 	}
@@ -317,7 +324,7 @@ func encodeValueList(enc *msgpack.Encoder, items []Value) error {
 		return err
 	}
 	for _, v := range items {
-		if err := v.EncodeMsgpack(enc); err != nil {
+		if err := v.encodeMsgpack(enc, p); err != nil {
 			return err
 		}
 	}
@@ -360,9 +367,7 @@ func encodeLabeledError(enc *msgpack.Encoder, le *LabeledError) error {
 	return enc.EncodeValue(reflect.ValueOf(le))
 }
 
-var _ msgpack.CustomDecoder = (*Value)(nil)
-
-func (v *Value) DecodeMsgpack(dec *msgpack.Decoder) error {
+func (v *Value) decodeMsgpack(dec *msgpack.Decoder, p *Plugin) error {
 	name, err := decodeWrapperMap(dec)
 	if err != nil {
 		return fmt.Errorf("decodeWrapperMap: %w", err)
@@ -371,11 +376,11 @@ func (v *Value) DecodeMsgpack(dec *msgpack.Decoder) error {
 	case "Glob":
 		return decodeGlob(dec, v)
 	default:
-		return v.decodeValue(dec, name)
+		return v.decodeValue(dec, name, p)
 	}
 }
 
-func (v *Value) decodeValue(dec *msgpack.Decoder, typeName string) error {
+func (v *Value) decodeValue(dec *msgpack.Decoder, typeName string, p *Plugin) error {
 	n, err := dec.DecodeMapLen()
 	if err != nil {
 		return err
@@ -417,8 +422,22 @@ func (v *Value) decodeValue(dec *msgpack.Decoder, typeName string) error {
 				}
 				v.Value, err = time.Parse(time.RFC3339, d)
 			case "Record":
+				var cnt int
+				if cnt, err = dec.DecodeMapLen(); err != nil {
+					break
+				}
+				var name string
 				rec := Record{}
-				err = dec.DecodeValue(reflect.ValueOf(&rec))
+				for range cnt {
+					if name, err = dec.DecodeString(); err != nil {
+						break
+					}
+					var v Value
+					if err = v.decodeMsgpack(dec, p); err != nil {
+						break
+					}
+					rec[name] = v
+				}
 				v.Value = rec
 			case "Closure":
 				c := Closure{}
@@ -430,6 +449,8 @@ func (v *Value) decodeValue(dec *msgpack.Decoder, typeName string) error {
 				v.Value = Block(id)
 			case "Range":
 				v.Value, err = decodeMsgpackRange(dec)
+			case "Custom":
+				v.Value, err = decodeCustomValue(dec, p)
 			default:
 				return fmt.Errorf("unsupported Value type %q", typeName)
 			}
@@ -443,7 +464,7 @@ func (v *Value) decodeValue(dec *msgpack.Decoder, typeName string) error {
 			}
 			lst := make([]Value, cnt)
 			for i := 0; i < cnt; i++ {
-				if err := lst[i].DecodeMsgpack(dec); err != nil {
+				if err := lst[i].decodeMsgpack(dec, p); err != nil {
 					return fmt.Errorf("decoding List item [%d/%d]: %w", i+1, cnt, err)
 				}
 			}

@@ -1,6 +1,7 @@
 package nu
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -33,11 +34,13 @@ The cfg may be nil, in that case default configuration will be used.
 */
 func New(cmd []*Command, version string, cfg *Config) (_ *Plugin, err error) {
 	p := &Plugin{
-		ver:  version,
-		cmds: make(map[string]*Command),
-		outs: make(map[int]outputStream),
-		inls: make(map[int]inputStream),
-		engc: make(map[int]chan any),
+		ver:   version,
+		cmds:  make(map[string]*Command),
+		outs:  make(map[int]outputStream),
+		inls:  make(map[int]inputStream),
+		engc:  make(map[int]chan any),
+		cvals: map[uint32]CustomValue{},
+
 		runs: commandsInFlight{},
 		log:  cfg.logger(),
 	}
@@ -80,7 +83,8 @@ type Plugin struct {
 	outs  map[int]outputStream
 	inls  map[int]inputStream
 	engc  map[int]chan any // in-flight engine calls
-	idGen atomic.Uint32    // id generator
+	cvals map[uint32]CustomValue
+	idGen atomic.Uint32 // id generator
 
 	in io.Reader
 	// output might be accessed by multiple goroutines so guard it with mutex
@@ -138,7 +142,7 @@ func (p *Plugin) Run(ctx context.Context) error {
 
 func (p *Plugin) mainMsgLoop(ctx context.Context) error {
 	dec := msgpack.NewDecoder(p.in)
-	dec.SetMapDecoder(decodeInputMsg)
+	dec.SetMapDecoder(p.decodeInputMsg)
 
 	for ctx.Err() == nil {
 		v, err := dec.DecodeInterface()
@@ -201,8 +205,45 @@ func (p *Plugin) handleCall(ctx context.Context, msg call) error {
 		return p.handleRun(ctx, m, msg.ID)
 	case metadata:
 		return p.handleMetadata(ctx, msg.ID)
+	case customValueOp:
+		return p.handleCustomValueOp(ctx, msg.ID, m)
 	default:
 		return fmt.Errorf("unknown Call message %T", m)
+	}
+}
+
+func (p *Plugin) handleCustomValueOp(ctx context.Context, callID int, cvOp customValueOp) error {
+	cv, ok := p.cvals[cvOp.id]
+	if !ok {
+		return fmt.Errorf("custom value operation on unknown variable {%s, %d} %T", cvOp.name, cvOp.id, cvOp.op)
+	}
+
+	handleResult := func(v Value, err error) error {
+		if err != nil {
+			return err
+		}
+		rsp := callResponse{ID: callID, Response: &pipelineData{Data: v}}
+		return p.outputMsg(ctx, &rsp)
+	}
+
+	switch op := cvOp.op.(type) {
+	case toBaseValue:
+		return handleResult(cv.ToBaseValue(ctx))
+	case followPathInt:
+		return handleResult(cv.FollowPathInt(ctx, op.Item))
+	case followPathString:
+		return handleResult(cv.FollowPathString(ctx, op.Item))
+	case operation:
+		return handleResult(cv.Operation(ctx, op.op, op.value))
+	case partialCmp:
+		return p.outputMsg(ctx, &callResponse{ID: callID, Response: cv.PartialCmp(ctx, op.value)})
+	case dropped:
+		if err := cv.Dropped(ctx); err != nil {
+			return p.outputMsg(ctx, &callResponse{ID: callID, Response: err})
+		}
+		return p.outputMsg(ctx, &callResponse{ID: callID, Response: &pipelineData{Data: empty{}}})
+	default:
+		return fmt.Errorf("unknown custom value operation %T on %s", cvOp.op, cvOp.name)
 	}
 }
 
@@ -410,7 +451,7 @@ func (p *Plugin) handleCallError(ctx context.Context, callID int, callErr error)
 Encode data as message pack and send it out.
 */
 func (p *Plugin) outputMsg(ctx context.Context, data any) error {
-	b, err := msgpack.Marshal(data)
+	b, err := p.serialize(data)
 	if err != nil {
 		return fmt.Errorf("serializing %T: %w", data, err)
 	}
@@ -426,4 +467,37 @@ func (p *Plugin) outputRaw(ctx context.Context, data []byte) error {
 		return fmt.Errorf("writing to output: %w", err)
 	}
 	return nil
+}
+
+func (p *Plugin) serialize(data any) (_ []byte, err error) {
+	type mpe interface {
+		encodeMsgpack(*msgpack.Encoder, *Plugin) error
+	}
+
+	enc := msgpack.GetEncoder()
+	defer msgpack.PutEncoder(enc)
+	var buf bytes.Buffer
+	enc.Reset(&buf)
+	if f, ok := data.(mpe); ok {
+		err = f.encodeMsgpack(enc, p)
+	} else {
+		err = enc.Encode(data)
+	}
+	return buf.Bytes(), err
+}
+
+func (p *Plugin) deserialize(data []byte, v any) error {
+	type mpe interface {
+		decodeMsgpack(*msgpack.Decoder, *Plugin) error
+	}
+
+	dec := msgpack.GetDecoder()
+	defer msgpack.PutDecoder(dec)
+	dec.UsePreallocateValues(true)
+	dec.Reset(bytes.NewReader(data))
+	if f, ok := v.(mpe); ok {
+		return f.decodeMsgpack(dec, p)
+	}
+
+	return dec.Decode(v)
 }

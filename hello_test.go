@@ -16,6 +16,8 @@ func Test_Hello_DeEncode_happy(t *testing.T) {
 		{Protocol: "nu-plugin", Version: "0.93.0", Features: features{LocalSocket: true}},
 	}
 
+	p := Plugin{}
+
 	for x, tc := range testCases {
 		bin, err := msgpack.Marshal(&tc)
 		if err != nil {
@@ -24,7 +26,7 @@ func Test_Hello_DeEncode_happy(t *testing.T) {
 		}
 
 		dec := msgpack.NewDecoder(bytes.NewBuffer(bin))
-		dec.SetMapDecoder(decodeInputMsg)
+		dec.SetMapDecoder(p.decodeInputMsg)
 		dv, err := dec.DecodeInterface()
 		if err != nil {
 			t.Errorf("[%d] decoding %#v: %v", x, tc, err)

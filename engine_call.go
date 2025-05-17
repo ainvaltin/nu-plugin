@@ -21,9 +21,7 @@ type engineCallResponse struct {
 	Response any
 }
 
-var _ msgpack.CustomDecoder = (*engineCallResponse)(nil)
-
-func (cr *engineCallResponse) DecodeMsgpack(dec *msgpack.Decoder) (err error) {
+func (cr *engineCallResponse) decodeMsgpack(dec *msgpack.Decoder, p *Plugin) (err error) {
 	if cr.ID, err = decodeTupleStart(dec); err != nil {
 		return fmt.Errorf("decoding EngineCallResponse tuple: %w", err)
 	}
@@ -34,7 +32,7 @@ func (cr *engineCallResponse) DecodeMsgpack(dec *msgpack.Decoder) (err error) {
 	switch name {
 	case "PipelineData":
 		pd := pipelineData{}
-		if err := pd.DecodeMsgpack(dec); err != nil {
+		if err := pd.DecodeMsgpack(dec, p); err != nil {
 			return fmt.Errorf("decoding PipelineData of EngineCallResponse: %w", err)
 		}
 		cr.Response = pd
@@ -362,7 +360,7 @@ func (ec *evalClosure) EncodeMsgpack(enc *msgpack.Encoder) error {
 		return err
 	}
 	for x, v := range ec.cfg.positional {
-		if err := v.EncodeMsgpack(enc); err != nil {
+		if err := v.encodeMsgpack(enc, ec.cfg.p); err != nil {
 			return fmt.Errorf("encoding positional argument [%d]: %w", x, err)
 		}
 	}
@@ -422,7 +420,7 @@ Call implements [CallDecl engine call]. Use [ExecCommand.FindDeclaration] to
 obtain the Declaration.
 
 Note that [NamedParams] can be used as argument of Call in addition to the
-[Positional], [InputValue] and other [EvalArgument]s.
+[Positional], [InputValue] and other EvalArguments.
 
 [CallDecl engine call]: https://www.nushell.sh/contributor-book/plugin_protocol_reference.html#calldecl-engine-call
 */
@@ -515,7 +513,7 @@ func (args *evalArguments) encodeCommonFields(enc *msgpack.Encoder) error {
 	if err := enc.EncodeString("input"); err != nil {
 		return err
 	}
-	if err := encodePipelineDataHeader(enc, args.input); err != nil {
+	if err := encodePipelineDataHeader(enc, args.input, args.p); err != nil {
 		return fmt.Errorf("encode input: %w", err)
 	}
 

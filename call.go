@@ -81,7 +81,7 @@ type (
 	}
 )
 
-func decodeCall(dec *msgpack.Decoder) (any, error) {
+func decodeCall(dec *msgpack.Decoder, p *Plugin) (any, error) {
 	var err error
 	m := call{}
 	if m.ID, err = decodeTupleStart(dec); err != nil {
@@ -114,8 +114,14 @@ func decodeCall(dec *msgpack.Decoder) (any, error) {
 		switch name {
 		case "Run":
 			r := run{Call: evaluatedCall{Named: NamedParams{}}}
-			if err := r.DecodeMsgpack(dec); err != nil {
+			if err := r.decodeMsgpack(dec, p); err != nil {
 				return nil, fmt.Errorf("decoding Run: %w", err)
+			}
+			m.Call = r
+		case "CustomValueOp":
+			r := customValueOp{}
+			if err := r.decodeMsgpack(dec, p); err != nil {
+				return nil, fmt.Errorf("decoding CustomValueOp: %w", err)
 			}
 			m.Call = r
 		default:
@@ -128,9 +134,7 @@ func decodeCall(dec *msgpack.Decoder) (any, error) {
 	return m, nil
 }
 
-var _ msgpack.CustomDecoder = (*run)(nil)
-
-func (r *run) DecodeMsgpack(dec *msgpack.Decoder) error {
+func (r *run) decodeMsgpack(dec *msgpack.Decoder, p *Plugin) error {
 	cnt, err := dec.DecodeMapLen()
 	if err != nil {
 		return fmt.Errorf("reading Run map length: %w", err)
@@ -144,9 +148,9 @@ func (r *run) DecodeMsgpack(dec *msgpack.Decoder) error {
 		case "name":
 			r.Name, err = dec.DecodeString()
 		case "call":
-			err = dec.DecodeValue(reflect.ValueOf(&r.Call))
+			err = r.Call.decodeMsgpack(dec, p)
 		case "input":
-			r.Input, err = decodePipelineDataHeader(dec)
+			r.Input, err = decodePipelineDataHeader(dec, p)
 		default:
 			return fmt.Errorf("unknown key %q under Run", key)
 		}
@@ -157,7 +161,34 @@ func (r *run) DecodeMsgpack(dec *msgpack.Decoder) error {
 	return nil
 }
 
-func decodePipelineDataHeader(dec *msgpack.Decoder) (any, error) {
+func (ec *evaluatedCall) decodeMsgpack(dec *msgpack.Decoder, p *Plugin) error {
+	cnt, err := dec.DecodeMapLen()
+	if err != nil {
+		return fmt.Errorf("reading evaluatedCall map length: %w", err)
+	}
+	for idx := 0; idx < cnt; idx++ {
+		key, err := dec.DecodeString()
+		if err != nil {
+			return fmt.Errorf("reading evaluatedCall key: %w", err)
+		}
+		switch key {
+		case "head":
+			err = dec.DecodeValue(reflect.ValueOf(&ec.Head))
+		case "positional":
+			err = ec.Positional.decodeMsgpack(dec, p)
+		case "named":
+			err = ec.Named.decodeMsgpack(dec, p)
+		default:
+			return fmt.Errorf("unknown key %q under evaluatedCall", key)
+		}
+		if err != nil {
+			return fmt.Errorf("decoding evaluatedCall key %q: %w", key, err)
+		}
+	}
+	return nil
+}
+
+func decodePipelineDataHeader(dec *msgpack.Decoder, p *Plugin) (any, error) {
 	c, err := dec.PeekCode()
 	if err != nil {
 		return nil, err
@@ -180,7 +211,7 @@ func decodePipelineDataHeader(dec *msgpack.Decoder) (any, error) {
 		switch name {
 		case "Value":
 			v := pipelineValue{}
-			if err := v.DecodeMsgpack(dec); err != nil {
+			if err := v.decodeMsgpack(dec, p); err != nil {
 				return nil, fmt.Errorf("decoding pipelineValue: %w", err)
 			}
 			return v.V, nil
@@ -204,10 +235,10 @@ func decodePipelineDataHeader(dec *msgpack.Decoder) (any, error) {
 	}
 }
 
-func encodePipelineDataHeader(enc *msgpack.Encoder, data any) error {
+func encodePipelineDataHeader(enc *msgpack.Encoder, data any, p *Plugin) error {
 	switch dt := data.(type) {
 	case Value:
-		return (&pipelineValue{V: dt}).EncodeMsgpack(enc)
+		return (&pipelineValue{V: dt}).encodeMsgpack(enc, p)
 	case *listStream:
 		if err := encodeMapStart(enc, "ListStream"); err != nil {
 			return err
@@ -225,7 +256,7 @@ func encodePipelineDataHeader(enc *msgpack.Encoder, data any) error {
 	}
 }
 
-func (pp *positionalParams) EncodeMsgpack(enc *msgpack.Encoder) error {
+func (pp *positionalParams) encodeMsgpack(enc *msgpack.Encoder, p *Plugin) error {
 	if pp == nil || len(*pp) == 0 {
 		return enc.EncodeArrayLen(0)
 	}
@@ -234,7 +265,25 @@ func (pp *positionalParams) EncodeMsgpack(enc *msgpack.Encoder) error {
 		return err
 	}
 	for _, v := range *pp {
-		if err := v.EncodeMsgpack(enc); err != nil {
+		if err := v.encodeMsgpack(enc, p); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (pp *positionalParams) decodeMsgpack(dec *msgpack.Decoder, p *Plugin) error {
+	count, err := dec.DecodeArrayLen()
+	if err != nil {
+		return fmt.Errorf("reading positionalParams count: %w", err)
+	}
+	if count == -1 {
+		return nil
+	}
+
+	*pp = make(positionalParams, count)
+	for idx := range count {
+		if err = (*pp)[idx].decodeMsgpack(dec, p); err != nil {
 			return err
 		}
 	}
@@ -244,9 +293,7 @@ func (pp *positionalParams) EncodeMsgpack(enc *msgpack.Encoder) error {
 // to implement EvalArgument
 func (np NamedParams) apply(cfg *evalArguments) error { cfg.named = np; return nil }
 
-var _ msgpack.CustomEncoder = (*NamedParams)(nil)
-
-func (np *NamedParams) EncodeMsgpack(enc *msgpack.Encoder) error {
+func (np *NamedParams) encodeMsgpack(enc *msgpack.Encoder, p *Plugin) error {
 	if np == nil || len(*np) == 0 {
 		return enc.EncodeArrayLen(0)
 	}
@@ -263,16 +310,14 @@ func (np *NamedParams) EncodeMsgpack(enc *msgpack.Encoder) error {
 		if err := enc.EncodeValue(reflect.ValueOf(&parName)); err != nil {
 			return fmt.Errorf("writing named params [%s] key: %w", name, err)
 		}
-		if err := v.EncodeMsgpack(enc); err != nil {
+		if err := v.encodeMsgpack(enc, p); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-var _ msgpack.CustomDecoder = (*NamedParams)(nil)
-
-func (np *NamedParams) DecodeMsgpack(dec *msgpack.Decoder) error {
+func (np *NamedParams) decodeMsgpack(dec *msgpack.Decoder, p *Plugin) error {
 	count, err := dec.DecodeArrayLen()
 	if err != nil {
 		return fmt.Errorf("reading NamedParameter count: %w", err)
@@ -306,7 +351,7 @@ func (np *NamedParams) DecodeMsgpack(dec *msgpack.Decoder) error {
 				return err
 			}
 		} else {
-			if err = v.DecodeMsgpack(dec); err != nil {
+			if err = v.decodeMsgpack(dec, p); err != nil {
 				return fmt.Errorf("reading named params [%d] value: %w", idx, err)
 			}
 		}
@@ -320,9 +365,7 @@ type npName struct {
 	Span Span   `msgpack:"span"`
 }
 
-var _ msgpack.CustomEncoder = (*callResponse)(nil)
-
-func (cr *callResponse) EncodeMsgpack(enc *msgpack.Encoder) error {
+func (cr *callResponse) encodeMsgpack(enc *msgpack.Encoder, p *Plugin) error {
 	if err := encodeTupleInMap(enc, "CallResponse", cr.ID); err != nil {
 		return err
 	}
@@ -332,9 +375,9 @@ func (cr *callResponse) EncodeMsgpack(enc *msgpack.Encoder) error {
 		if err := encodeMapStart(enc, "Value"); err != nil {
 			return err
 		}
-		return dt.EncodeMsgpack(enc)
+		return dt.encodeMsgpack(enc, p)
 	case *pipelineData:
-		return dt.EncodeMsgpack(enc)
+		return dt.encodeMsgpack(enc, p)
 	case *LabeledError:
 		return encodeErrorResponse(enc, dt)
 	case error:
@@ -352,11 +395,13 @@ func (cr *callResponse) EncodeMsgpack(enc *msgpack.Encoder) error {
 			return err
 		}
 		for _, v := range dt {
-			if err := enc.EncodeValue(reflect.ValueOf(&v)); err != nil {
+			if err := v.encodeMsgpack(enc, p); err != nil {
 				return err
 			}
 		}
 		return nil
+	case Ordering:
+		return dt.encodeMsgpack(enc)
 	default:
 		return fmt.Errorf("unsupported type %T in CallResponse", dt)
 	}
@@ -369,37 +414,33 @@ func encodeErrorResponse(enc *msgpack.Encoder, le *LabeledError) error {
 	return enc.EncodeValue(reflect.ValueOf(le))
 }
 
-var _ msgpack.CustomEncoder = (*pipelineData)(nil)
-
-func (pd *pipelineData) EncodeMsgpack(enc *msgpack.Encoder) error {
+func (pd *pipelineData) encodeMsgpack(enc *msgpack.Encoder, p *Plugin) error {
 	if err := encodeMapStart(enc, "PipelineData"); err != nil {
 		return err
 	}
 
-	return encodePipelineDataHeader(enc, pd.Data)
+	return encodePipelineDataHeader(enc, pd.Data, p)
 }
 
-var _ msgpack.CustomDecoder = (*pipelineData)(nil)
-
-func (pd *pipelineData) DecodeMsgpack(dec *msgpack.Decoder) (err error) {
-	pd.Data, err = decodePipelineDataHeader(dec)
+func (pd *pipelineData) DecodeMsgpack(dec *msgpack.Decoder, p *Plugin) (err error) {
+	pd.Data, err = decodePipelineDataHeader(dec, p)
 	return err
 }
 
-func (pv *pipelineValue) EncodeMsgpack(enc *msgpack.Encoder) error {
+func (pv *pipelineValue) encodeMsgpack(enc *msgpack.Encoder, p *Plugin) error {
 	if err := encodeMapStart(enc, "Value"); err != nil {
 		return err
 	}
 	if err := enc.EncodeArrayLen(2); err != nil {
 		return fmt.Errorf("encoding PipelineDataHeader Value tuple length: %w", err)
 	}
-	if err := pv.V.EncodeMsgpack(enc); err != nil {
+	if err := pv.V.encodeMsgpack(enc, p); err != nil {
 		return fmt.Errorf("encoding PipelineDataHeader of Value: %w", err)
 	}
 	return pv.M.EncodeMsgpack(enc)
 }
 
-func (pv *pipelineValue) DecodeMsgpack(dec *msgpack.Decoder) error {
+func (pv *pipelineValue) decodeMsgpack(dec *msgpack.Decoder, p *Plugin) error {
 	dLen, err := dec.DecodeArrayLen()
 	if err != nil {
 		return fmt.Errorf("decode tuple length of Value: %w", err)
@@ -407,7 +448,7 @@ func (pv *pipelineValue) DecodeMsgpack(dec *msgpack.Decoder) error {
 	if dLen != 2 {
 		return fmt.Errorf("expected two item tuple, got %d items", dLen)
 	}
-	if err = pv.V.DecodeMsgpack(dec); err != nil {
+	if err = pv.V.decodeMsgpack(dec, p); err != nil {
 		return fmt.Errorf("decoding Value: %w", err)
 	}
 	if err = pv.M.DecodeMsgpack(dec); err != nil {

@@ -17,15 +17,17 @@ func Test_Data_DeEncode_happy(t *testing.T) {
 		{ID: 8, Data: LabeledError{Msg: "disconnected"}},
 	}
 
+	p := Plugin{}
+
 	for x, tc := range testCases {
-		bin, err := msgpack.Marshal(&tc)
+		bin, err := p.serialize(&tc)
 		if err != nil {
 			t.Errorf("[%d] encoding %#v: %v", x, tc, err)
 			continue
 		}
 
 		dec := msgpack.NewDecoder(bytes.NewBuffer(bin))
-		dec.SetMapDecoder(decodeInputMsg)
+		dec.SetMapDecoder(p.decodeInputMsg)
 		dv, err := dec.DecodeInterface()
 		if err != nil {
 			t.Errorf("[%d] decoding %#v: %v", x, tc, err)
@@ -47,6 +49,8 @@ func Test_StreamMsgs_DeEncode_happy(t *testing.T) {
 		drop{ID: 42},
 	}
 
+	p := Plugin{}
+
 	for x, tc := range testCases {
 		bin, err := msgpack.Marshal(&tc)
 		if err != nil {
@@ -55,7 +59,7 @@ func Test_StreamMsgs_DeEncode_happy(t *testing.T) {
 		}
 
 		dec := msgpack.NewDecoder(bytes.NewBuffer(bin))
-		dec.SetMapDecoder(decodeInputMsg)
+		dec.SetMapDecoder(p.decodeInputMsg)
 		dv, err := dec.DecodeInterface()
 		if err != nil {
 			t.Errorf("[%d] decoding %#v: %v", x, tc, err)

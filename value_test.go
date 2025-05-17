@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/vmihailenco/msgpack/v5"
 )
 
 func Test_Value_DeEncode(t *testing.T) {
@@ -57,14 +56,15 @@ func Test_Value_DeEncode(t *testing.T) {
 		{in: Value{Value: IntRange{Start: 1, Step: 2, End: 3, Bound: Unbounded}}, out: Value{Value: IntRange{Start: 1, Step: 2, End: 0, Bound: Unbounded}}},
 	}
 
+	p := &Plugin{}
 	for x, tc := range testCases {
-		bin, err := msgpack.Marshal(&tc.in)
+		bin, err := p.serialize(&tc.in)
 		if err != nil {
 			t.Errorf("encoding %#v: %v", tc.in.Value, err)
 			continue
 		}
 		var dv Value
-		if err := msgpack.Unmarshal(bin, &dv); err != nil {
+		if err := p.deserialize(bin, &dv); err != nil {
 			t.Errorf("decoding %#v: %v", tc.in.Value, err)
 			continue
 		}
@@ -77,12 +77,14 @@ func Test_Value_DeEncode(t *testing.T) {
 
 func Test_Value_Encode(t *testing.T) {
 	t.Run("unsupported type", func(t *testing.T) {
+		p := &Plugin{}
+
 		v := Value{Value: 10i}
-		_, err := msgpack.Marshal(&v)
+		_, err := p.serialize(&v)
 		expectErrorMsg(t, err, `unsupported Value type complex128`)
 
 		v = Value{Value: struct{ Foo string }{"anon"}}
-		_, err = msgpack.Marshal(&v)
+		_, err = p.serialize(&v)
 		expectErrorMsg(t, err, `unsupported Value type struct { Foo string }`)
 	})
 }

@@ -108,3 +108,31 @@ func decodeWrapperMap(dec *msgpack.Decoder) (string, error) {
 	}
 	return keyName, nil
 }
+
+func encodeString(enc *msgpack.Encoder, key, value string) (err error) {
+	if err = enc.EncodeString(key); err != nil {
+		return fmt.Errorf("encoding key %q", key)
+	}
+	if err = enc.EncodeString(value); err != nil {
+		return fmt.Errorf("encoding value of the key %q", key)
+	}
+	return nil
+}
+
+func encodeBoolean(enc *msgpack.Encoder, key string, value bool) (err error) {
+	if err = enc.EncodeString(key); err != nil {
+		return fmt.Errorf("encoding key %q", key)
+	}
+	if err = enc.EncodeBool(value); err != nil {
+		return fmt.Errorf("encoding value of the key %q", key)
+	}
+	return nil
+}
+
+func bval(b bool) int {
+	r := 0
+	if b {
+		r = 1
+	}
+	return r
+}

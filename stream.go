@@ -57,9 +57,7 @@ type (
 	}
 )
 
-var _ msgpack.CustomDecoder = (*data)(nil)
-
-func (d *data) DecodeMsgpack(dec *msgpack.Decoder) error {
+func (d *data) decodeMsgpack(dec *msgpack.Decoder, p *Plugin) error {
 	id, err := decodeTupleStart(dec)
 	if err != nil {
 		return err
@@ -73,7 +71,7 @@ func (d *data) DecodeMsgpack(dec *msgpack.Decoder) error {
 	switch keyName {
 	case "List":
 		v := Value{}
-		if err := v.DecodeMsgpack(dec); err != nil {
+		if err := v.decodeMsgpack(dec, p); err != nil {
 			return err
 		}
 		d.Data = v
@@ -103,9 +101,7 @@ func (d *data) DecodeMsgpack(dec *msgpack.Decoder) error {
 	return nil
 }
 
-var _ msgpack.CustomEncoder = (*data)(nil)
-
-func (d *data) EncodeMsgpack(enc *msgpack.Encoder) error {
+func (d *data) encodeMsgpack(enc *msgpack.Encoder, p *Plugin) error {
 	if err := encodeTupleInMap(enc, "Data", d.ID); err != nil {
 		return err
 	}
@@ -114,7 +110,7 @@ func (d *data) EncodeMsgpack(enc *msgpack.Encoder) error {
 		if err := encodeMapStart(enc, "List"); err != nil {
 			return err
 		}
-		return v.EncodeMsgpack(enc)
+		return v.encodeMsgpack(enc, p)
 	case []byte:
 		if err := encodeMapStart(enc, "Raw"); err != nil {
 			return err
