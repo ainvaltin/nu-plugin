@@ -16,7 +16,7 @@ Supported input types are:
   - time.Duration and time.Time
   - string
   - []byte
-  - Nu types defined by this package: [IntRange], [Record], [Filesize], [Glob], [Block], [Closure], []Value
+  - Nu types defined by this package: [IntRange], [Record], [Filesize], [Glob], [Block], [Closure], [CellPath], []Value
   - nil
 
 Slices and arrays (other than byte slices) are converted to List.
@@ -73,6 +73,8 @@ func ToValue(v any) Value {
 		return Value{Value: v}
 	case CustomValue:
 		return Value{Value: v}
+	case CellPath:
+		return Value{Value: v}
 	case Value:
 		return t
 	default:
@@ -101,6 +103,10 @@ func rv2nv(v reflect.Value) Value {
 	case reflect.Interface:
 		return rv2nv(v.Elem())
 	case reflect.Struct:
+		if v.Type() == reflect.TypeFor[CellPath]() {
+			return Value{Value: v.Interface()}
+		}
+
 		r := Record{}
 		for i := range v.Type().NumField() {
 			f := v.Type().Field(i)

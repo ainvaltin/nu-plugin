@@ -19,7 +19,6 @@ Nushell [protocol](https://www.nushell.sh/contributor-book/plugin_protocol_refer
 
 ### Unsupported Values
 - Range (partially, Int ranges are supported, Float ranges are not)
-- CellPath
 
 ### Example plugins
 
@@ -27,3 +26,8 @@ Example projects outside this repository, ie not those in the examples directory
 
 - [convert between formats](https://github.com/ainvaltin/nu_plugin_plist) like plist, base58, base85.
 - [bolt database](https://github.com/ainvaltin/nu_plugin_boltdb) operations.
+
+To discover more projects using this package see the 
+[dependents reported by GitHub](https://github.com/ainvaltin/nu-plugin/network/dependents)
+and 
+[importers reported by go package registry](https://pkg.go.dev/github.com/ainvaltin/nu-plugin?tab=importedby).

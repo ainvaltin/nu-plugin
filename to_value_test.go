@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 )
 
 func Test_ToValue(t *testing.T) {
@@ -66,6 +67,7 @@ func Test_ToValue(t *testing.T) {
 			Glob{Value: "**", NoExpand: true},
 			IntRange{Start: 1, Step: 2, End: 3},
 			Record{},
+			CellPath{},
 			[]Value{{Value: "item"}},
 		}
 
@@ -240,6 +242,17 @@ func Test_rv2nv(t *testing.T) {
 			if diff := cmp.Diff(tc.out, v.Value); diff != "" {
 				t.Errorf("[%d] encoding %T mismatch (-expected +actual):\n%s", x, tc.value, diff)
 			}
+		}
+	})
+
+	t.Run("CellPath", func(t *testing.T) {
+		cp := CellPath{}
+		cp.AddInteger(10, false)
+		cp.AddString("field", true)
+
+		v := rv2nv(reflect.ValueOf(cp))
+		if diff := cmp.Diff(cp, v.Value, cmpopts.EquateComparable(pathItem[uint]{}, pathItem[string]{})); diff != "" {
+			t.Errorf("encoding mismatch (-expected +actual):\n%s", diff)
 		}
 	})
 

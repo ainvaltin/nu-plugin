@@ -41,6 +41,7 @@ Incoming data is encoded as follows:
   - Closure -> [Closure]
   - Block -> [Block]
   - Range -> [IntRange]
+  - CellPath -> [CellPath]
 
 Outgoing values are encoded as:
 
@@ -62,6 +63,7 @@ Outgoing values are encoded as:
   - [IntRange] -> Range
   - error -> LabeledError
   - [CustomValue] -> Custom
+  - [CellPath] -> CellPath
 
 [Nushell Value]: https://www.nushell.sh/contributor-book/plugin_protocol_reference.html#value-types
 */
@@ -276,6 +278,11 @@ func (v *Value) encodeMsgpack(enc *msgpack.Encoder, p *Plugin) error {
 		if err = encodeCustomValue(enc, id, tv); err == nil {
 			p.cvals[id] = tv
 		}
+	case CellPath:
+		if err := startValue(enc, "CellPath"); err != nil {
+			return err
+		}
+		err = tv.encodeMsgpack(enc, p)
 	default:
 		return fmt.Errorf("unsupported Value type %T", tv)
 	}
@@ -451,6 +458,10 @@ func (v *Value) decodeValue(dec *msgpack.Decoder, typeName string, p *Plugin) er
 				v.Value, err = decodeMsgpackRange(dec)
 			case "Custom":
 				v.Value, err = decodeCustomValue(dec, p)
+			case "CellPath":
+				c := CellPath{}
+				err = c.decodeMsgpack(dec, p)
+				v.Value = c
 			default:
 				return fmt.Errorf("unsupported Value type %q", typeName)
 			}
