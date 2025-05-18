@@ -29,13 +29,13 @@ func main() {
 					{In: types.Nothing(), Out: types.Custom("bbolt")},
 					{In: types.Nothing(), Out: types.Any()},
 				},
-				RequiredPositional: nu.PositionalArgs{
+				RequiredPositional: []nu.PositionalArg{
 					{Name: "file", Shape: syntaxshape.Filepath(), Desc: `Name of the Bolt database file.`},
 				},
 				RestPositional:       &nu.PositionalArg{Name: "path", Shape: syntaxshape.OneOf(syntaxshape.List(syntaxshape.Any()), syntaxshape.Binary(), syntaxshape.String()), Desc: `Either bucket or key name, if not given then root bucket.`},
 				AllowMissingExamples: true,
 			},
-			Examples: nu.Examples{
+			Examples: []nu.Example{
 				{Description: "List of root buckets", Example: "boltval /path/to.db | $in.buckets", Result: &nu.Value{Value: nu.Record{"db": nu.Value{Value: "/path/to.db"}, "item": nu.Value{Value: []byte{1, 2, 3}}}}},
 				{Description: `Add bucket "bar", then add key "foo" into that bucket with value 0x[0102030405]`, Example: `boltval /path/to.db | $in + bar + {key: foo, value: 0x[0102030405]}`, Result: &nu.Value{Value: nu.Record{"db": nu.Value{Value: "/path/to.db"}, "item": nu.ToValue([][]byte{{98, 97, 114}, {102, 111, 111}})}}},
 				{Description: "Value of the key 'foo' in the bucket 'bar'.", Example: "boltval /path/to.db [bar, foo] | $in.value", Result: &nu.Value{Value: []byte{0, 1, 2, 3, 4, 5}}},

@@ -1,3 +1,6 @@
+/*
+Package types defines types and functions to describe Nu types in plugin signatures.
+*/
 package types
 
 import (

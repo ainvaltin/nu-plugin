@@ -54,7 +54,7 @@ func New(cmd []*Command, version string, cfg *Config) (_ *Plugin, err error) {
 		if _, ok := p.cmds[cmdName]; ok {
 			return nil, fmt.Errorf("command %q already registered", cmdName)
 		}
-		if err := v.Signature.Named.addHelp(); err != nil {
+		if err := v.Signature.addHelp(); err != nil {
 			p.log.Warn(fmt.Sprintf("adding help flag to %q command", cmdName), attrError(err))
 		}
 		if err := v.Validate(); err != nil {
@@ -64,7 +64,7 @@ func New(cmd []*Command, version string, cfg *Config) (_ *Plugin, err error) {
 	}
 
 	if len(p.cmds) == 0 {
-		return nil, fmt.Errorf("no commands registered")
+		return nil, errors.New("no commands registered")
 	}
 	return p, nil
 }

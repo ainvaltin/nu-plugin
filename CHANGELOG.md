@@ -1,4 +1,17 @@
 
+## [2025-05-18]
+- Change field `Flag.Short` type from `string` to `rune`.
+- Drop `Examples` type, use `[]Example` instead.
+- Drop `Flags` type, use `[]Flag` instead.
+- Drop `PositionalArgs` type, use `[]PositionalArg` instead.
+
+`gofmt` commands to fix the type changes:
+```
+gofmt -r 'nu.Examples -> []nu.Example' -w *.go
+gofmt -r 'nu.Flags -> []nu.Flag' -w *.go
+gofmt -r 'nu.PositionalArgs -> []nu.PositionalArg' -w *.go
+```
+
 ## [2025-05-17]
 - Plugin protocol version 0.104.0
 - Fix: SyntaxShape `Closure` didn't preserve argument type(s).

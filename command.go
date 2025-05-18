@@ -16,7 +16,7 @@ Command describes an command provided by the plugin.
 */
 type Command struct {
 	Signature PluginSignature
-	Examples  Examples
+	Examples  []Example
 
 	// callback executed on command invocation
 	OnRun func(context.Context, *ExecCommand) error
@@ -45,7 +45,7 @@ func (c Command) encodeMsgpack(enc *msgpack.Encoder, p *Plugin) (err error) {
 	if err = enc.EncodeString("examples"); err != nil {
 		return err
 	}
-	return c.Examples.encodeMsgpack(enc, p)
+	return encodeExamples(enc, c.Examples, p)
 }
 
 type PluginSignature struct {
@@ -56,18 +56,28 @@ type PluginSignature struct {
 	Description        string
 	SearchTerms        []string
 	Category           string // https://docs.rs/nu-protocol/latest/nu_protocol/enum.Category.html
-	RequiredPositional PositionalArgs
-	OptionalPositional PositionalArgs
+	RequiredPositional []PositionalArg
+	OptionalPositional []PositionalArg
 	RestPositional     *PositionalArg
 
 	// The "help" (short "h") flag will be added automatically when plugin
 	// is created, do not use these names for other flags or arguments.
-	Named                Flags
+	Named                []Flag
 	InputOutputTypes     []InOutTypes
 	IsFilter             bool
 	CreatesScope         bool
 	AllowsUnknownArgs    bool
 	AllowMissingExamples bool
+}
+
+func (sig *PluginSignature) addHelp() error {
+	for _, v := range sig.Named {
+		if v.Long == "help" || v.Short == 'h' {
+			return fmt.Errorf("help flag is already registered")
+		}
+	}
+	sig.Named = append(sig.Named, Flag{Long: "help", Short: 'h', Desc: "Display the help message for this command"})
+	return nil
 }
 
 func (sig PluginSignature) encodeMsgpack(enc *msgpack.Encoder, p *Plugin) (err error) {
@@ -104,13 +114,13 @@ func (sig PluginSignature) encodeMsgpack(enc *msgpack.Encoder, p *Plugin) (err e
 	if err = enc.EncodeString("required_positional"); err != nil {
 		return err
 	}
-	if err = sig.RequiredPositional.encodeMsgpack(enc, p); err != nil {
+	if err = encodePositionalArgs(enc, sig.RequiredPositional, p); err != nil {
 		return err
 	}
 	if err = enc.EncodeString("optional_positional"); err != nil {
 		return err
 	}
-	if err = sig.OptionalPositional.encodeMsgpack(enc, p); err != nil {
+	if err = encodePositionalArgs(enc, sig.OptionalPositional, p); err != nil {
 		return err
 	}
 	if sig.RestPositional != nil {
@@ -125,7 +135,7 @@ func (sig PluginSignature) encodeMsgpack(enc *msgpack.Encoder, p *Plugin) (err e
 	if err = enc.EncodeString("named"); err != nil {
 		return err
 	}
-	if err = sig.Named.encodeMsgpack(enc, p); err != nil {
+	if err = encodeFlags(enc, sig.Named, p); err != nil {
 		return err
 	}
 	if err = enc.EncodeString("input_output_types"); err != nil {
@@ -159,41 +169,32 @@ type InOutTypes struct {
 	Out types.Type
 }
 
-type (
-	PositionalArg struct {
-		Name    string                  `msgpack:"name"`
-		Desc    string                  `msgpack:"desc"`
-		Shape   syntaxshape.SyntaxShape `msgpack:"shape"`
-		VarId   uint                    `msgpack:"var_id,omitempty"`
-		Default *Value                  `msgpack:"default_value,omitempty"`
-	}
-	PositionalArgs []PositionalArg
-)
+type PositionalArg struct {
+	Name    string                  `msgpack:"name"`
+	Desc    string                  `msgpack:"desc"`
+	Shape   syntaxshape.SyntaxShape `msgpack:"shape"`
+	VarId   uint                    `msgpack:"var_id,omitempty"`
+	Default *Value                  `msgpack:"default_value,omitempty"`
+}
 
-type (
-	/*
-		Flag is a definition of a flag (Shape is unassigned) or named argument (Shape is assigned).
-	*/
-	Flag struct {
-		Long     string
-		Short    string // optional, must be single character!
-		Shape    syntaxshape.SyntaxShape
-		Required bool
-		Desc     string
-		VarId    uint
-		Default  *Value
-	}
-	Flags []Flag
-)
+/*
+Flag is a definition of a flag (Shape is unassigned) or named argument (Shape is assigned).
+*/
+type Flag struct {
+	Long     string // long name of the flag
+	Short    rune   // optional short name of the flag
+	Shape    syntaxshape.SyntaxShape
+	Required bool
+	Desc     string
+	VarId    uint
+	Default  *Value
+}
 
-type (
-	Example struct {
-		Example     string
-		Description string
-		Result      *Value
-	}
-	Examples []Example
-)
+type Example struct {
+	Example     string
+	Description string
+	Result      *Value
+}
 
 func (sig PluginSignature) Validate() error {
 	if sig.Name == "" {
@@ -212,7 +213,7 @@ func (sig PluginSignature) Validate() error {
 		return fmt.Errorf("command Input-Output types must be specified")
 	}
 
-	return sig.Named.Validate()
+	return nil
 }
 
 /*
@@ -262,14 +263,14 @@ func (p *Plugin) handleMsgDecode(dec *msgpack.Decoder, name string) (_ any, err 
 	}
 }
 
-func (pa *PositionalArgs) encodeMsgpack(enc *msgpack.Encoder, p *Plugin) error {
-	if pa == nil || len(*pa) == 0 {
+func encodePositionalArgs(enc *msgpack.Encoder, pa []PositionalArg, p *Plugin) error {
+	if len(pa) == 0 {
 		return enc.EncodeArrayLen(0)
 	}
-	if err := enc.EncodeArrayLen(len(*pa)); err != nil {
+	if err := enc.EncodeArrayLen(len(pa)); err != nil {
 		return err
 	}
-	for _, v := range *pa {
+	for _, v := range pa {
 		if err := v.encodeMsgpack(enc, p); err != nil {
 			return err
 		}
@@ -315,7 +316,7 @@ func (pa *PositionalArg) encodeMsgpack(enc *msgpack.Encoder, p *Plugin) (err err
 }
 
 func (flag *Flag) encodeMsgpack(enc *msgpack.Encoder, p *Plugin) (err error) {
-	cnt := 3 + bval(flag.Short != "") + bval(flag.Shape != nil) + bval(flag.VarId != 0) + bval(flag.Default != nil)
+	cnt := 3 + bval(flag.Short != 0) + bval(flag.Shape != nil) + bval(flag.VarId != 0) + bval(flag.Default != nil)
 	if err = enc.EncodeMapLen(cnt); err != nil {
 		return err
 	}
@@ -323,8 +324,8 @@ func (flag *Flag) encodeMsgpack(enc *msgpack.Encoder, p *Plugin) (err error) {
 	if err = encodeString(enc, "long", flag.Long); err != nil {
 		return err
 	}
-	if flag.Short != "" {
-		if err = encodeString(enc, "short", flag.Short); err != nil {
+	if flag.Short != 0 {
+		if err = encodeString(enc, "short", string(flag.Short)); err != nil {
 			return err
 		}
 	}
@@ -361,14 +362,14 @@ func (flag *Flag) encodeMsgpack(enc *msgpack.Encoder, p *Plugin) (err error) {
 	return nil
 }
 
-func (flags *Flags) encodeMsgpack(enc *msgpack.Encoder, p *Plugin) error {
-	if flags == nil || len(*flags) == 0 {
+func encodeFlags(enc *msgpack.Encoder, flags []Flag, p *Plugin) error {
+	if len(flags) == 0 {
 		return enc.EncodeArrayLen(0)
 	}
-	if err := enc.EncodeArrayLen(len(*flags)); err != nil {
+	if err := enc.EncodeArrayLen(len(flags)); err != nil {
 		return err
 	}
-	for _, v := range *flags {
+	for _, v := range flags {
 		if err := v.encodeMsgpack(enc, p); err != nil {
 			return err
 		}
@@ -376,33 +377,14 @@ func (flags *Flags) encodeMsgpack(enc *msgpack.Encoder, p *Plugin) error {
 	return nil
 }
 
-func (flags *Flags) addHelp() error {
-	for _, v := range *flags {
-		if v.Long == "help" || v.Short == "h" {
-			return fmt.Errorf("help flag is already registered")
-		}
-	}
-	*flags = append(*flags, Flag{Long: "help", Short: "h", Desc: "Display the help message for this command"})
-	return nil
-}
-
-func (flags *Flags) Validate() error {
-	for _, v := range *flags {
-		if len(v.Short) > 1 {
-			return fmt.Errorf("flag's short name must be single character, got %q", v.Short)
-		}
-	}
-	return nil
-}
-
-func (ex *Examples) encodeMsgpack(enc *msgpack.Encoder, p *Plugin) error {
-	if ex == nil || len(*ex) == 0 {
+func encodeExamples(enc *msgpack.Encoder, ex []Example, p *Plugin) error {
+	if len(ex) == 0 {
 		return enc.EncodeArrayLen(0)
 	}
-	if err := enc.EncodeArrayLen(len(*ex)); err != nil {
+	if err := enc.EncodeArrayLen(len(ex)); err != nil {
 		return err
 	}
-	for _, v := range *ex {
+	for _, v := range ex {
 		if err := v.encodeMsgpack(enc, p); err != nil {
 			return err
 		}

@@ -15,22 +15,22 @@ plugin to operate with bbolt databases.
 ## Examples
 
 The command
-```shell
+```nushell
 boltval ~/data/test.db | $in.buckets | sort
 ```
 triggers `FollowPathString` (the `.buckets` access) and `PartialCmp` (the `sort` filter).
 It lists all buckets in the root bucket.
 
-```shell
+```nushell
 boltval ~/data/test.db | $in + bar + {key: foo, value: 0x[0102030405]}
 ```
-This triggers `Operation` on the custom value with `Math.Add` operator and string "foo"
-and then on the resulting variable another Add with record as right hand side value.
-Implementation of the Math.Add on the Custom Value is that it will add bucket "bar",
+This triggers `Operation` on the custom value with `Math_Add` operator and string "foo"
+and then on the resulting variable another add with record as right hand side value.
+Implementation of the `Math_Add` on the Custom Value is that it will add bucket "bar",
 then add key "foo" into that bucket with value `0x[0102030405]`.
 
 To list all keys in all top level buckets
-```shell
+```nushell
 boltval ~/data/test.db | $in.buckets | each {|| $in.keys} | flatten
 ```
 

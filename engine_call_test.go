@@ -13,15 +13,15 @@ func ExampleInputListStream() {
 	_ = &nu.Command{
 		Signature: nu.PluginSignature{
 			Name: "demo",
-			RequiredPositional: nu.PositionalArgs{
-				nu.PositionalArg{
+			RequiredPositional: []nu.PositionalArg{
+				{
 					Name:  "closure",
 					Desc:  "Closure to be evaluated",
 					Shape: syntaxshape.Closure(),
 				},
 			},
 		},
-		Examples: nu.Examples{
+		Examples: []nu.Example{
 			{Description: `Closure which adds +1 to each item in input stream and returns stream`, Example: `demo { $in | each {|n| $n + 1} }`},
 		},
 
