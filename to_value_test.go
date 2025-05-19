@@ -68,12 +68,13 @@ func Test_ToValue(t *testing.T) {
 			IntRange{Start: 1, Step: 2, End: 3},
 			Record{},
 			CellPath{},
+			cvt{42, nil},
 			[]Value{{Value: "item"}},
 		}
 
 		for x, tc := range testCases {
 			v := ToValue(tc)
-			if diff := cmp.Diff(tc, v.Value); diff != "" {
+			if diff := cmp.Diff(tc, v.Value, cmpopts.EquateComparable(cvt{})); diff != "" {
 				t.Errorf("[%d] encoding %T mismatch (-expected +actual):\n%s", x, tc, diff)
 			}
 		}
@@ -384,18 +385,24 @@ func Test_rv2nv(t *testing.T) {
 			{in: []int{1, 2, 3}, out: Value{Value: []Value{{Value: int64(1)}, {Value: int64(2)}, {Value: int64(3)}}}},
 			{in: []string{"foo"}, out: Value{Value: []Value{{Value: "foo"}}}},
 			{in: [3]int{1, 2, 3}, out: Value{Value: []Value{{Value: int64(1)}, {Value: int64(2)}, {Value: int64(3)}}}},
+			{in: []cvt{{1, nil}}, out: Value{Value: []Value{{Value: cvt{1, nil}}}}},
 		}
 
 		for x, tc := range testCases {
 			v := rv2nv(reflect.ValueOf(tc.in))
-			if diff := cmp.Diff(tc.out, v); diff != "" {
+			if diff := cmp.Diff(tc.out, v, cmpopts.EquateComparable(cvt{})); diff != "" {
 				t.Errorf("[%d] encoding %T mismatch (-expected +actual):\n%s", x, tc.in, diff)
 			}
 
 			v = ToValue(tc.in)
-			if diff := cmp.Diff(tc.out, v); diff != "" {
+			if diff := cmp.Diff(tc.out, v, cmpopts.EquateComparable(cvt{})); diff != "" {
 				t.Errorf("[%d] encoding %T mismatch (-expected +actual):\n%s", x, tc.in, diff)
 			}
 		}
 	})
+}
+
+type cvt struct {
+	f int
+	CustomValue
 }

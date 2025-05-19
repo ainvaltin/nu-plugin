@@ -171,7 +171,7 @@ func (ec *evaluatedCall) encodeMsgpack(enc *msgpack.Encoder, p *Plugin) error {
 	if err := enc.EncodeString("head"); err != nil {
 		return err
 	}
-	if err := enc.EncodeValue(reflect.ValueOf(&ec.Head)); err != nil {
+	if err := ec.Head.encodeMsgpack(enc); err != nil {
 		return err
 	}
 	if err := enc.EncodeString("positional"); err != nil {

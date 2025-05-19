@@ -77,6 +77,51 @@ type Span struct {
 	End   int `msgpack:"end"`
 }
 
+func (v Span) encodeMsgpack(enc *msgpack.Encoder) error {
+	if err := enc.EncodeMapLen(2); err != nil {
+		return err
+	}
+	if err := enc.EncodeString("start"); err != nil {
+		return err
+	}
+	if err := enc.EncodeInt(int64(v.Start)); err != nil {
+		return err
+	}
+	if err := enc.EncodeString("end"); err != nil {
+		return err
+	}
+	if err := enc.EncodeInt(int64(v.End)); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (v *Span) decodeMsgpack(dec *msgpack.Decoder) error {
+	cnt, err := dec.DecodeMapLen()
+	if err != nil {
+		return err
+	}
+	if cnt != 2 {
+		return fmt.Errorf("expected span map to contain two keys, got %d", cnt)
+	}
+	for range cnt {
+		key, err := dec.DecodeString()
+		if err != nil {
+			return err
+		}
+		switch key {
+		case "start":
+			v.Start, err = dec.DecodeInt()
+		case "end":
+			v.End, err = dec.DecodeInt()
+		}
+		if err != nil {
+			return fmt.Errorf("decoding %s value: %w", key, err)
+		}
+	}
+	return nil
+}
+
 /*
 Filesize is Nushell [Filesize Value] type.
 
@@ -130,90 +175,55 @@ func (v *Value) encodeMsgpack(enc *msgpack.Encoder, p *Plugin) error {
 
 	switch tv := v.Value.(type) {
 	case bool:
-		if err := startValue(enc, "Bool"); err != nil {
-			return err
+		if err = startValue(enc, "Bool"); err == nil {
+			err = enc.EncodeBool(tv)
 		}
-		err = enc.EncodeBool(tv)
 	case Filesize:
-		if err := startValue(enc, "Filesize"); err != nil {
-			return err
-		}
-		err = enc.EncodeInt64(int64(tv))
+		err = encodeInt(enc, "Filesize", int64(tv))
 	case time.Duration:
-		if err := startValue(enc, "Duration"); err != nil {
-			return err
-		}
-		err = enc.EncodeInt64(tv.Nanoseconds())
+		err = encodeInt(enc, "Duration", tv.Nanoseconds())
 	case time.Time:
-		if err := startValue(enc, "Date"); err != nil {
-			return err
+		if err = startValue(enc, "Date"); err == nil {
+			err = enc.EncodeString(tv.Format(time.RFC3339))
 		}
-		err = enc.EncodeString(tv.Format(time.RFC3339))
 	case int:
-		if err := startValue(enc, "Int"); err != nil {
-			return err
-		}
-		err = enc.EncodeInt(int64(tv))
+		err = encodeInt(enc, "Int", int64(tv))
 	case int8:
-		if err := startValue(enc, "Int"); err != nil {
-			return err
-		}
-		err = enc.EncodeInt8(tv)
+		err = encodeInt(enc, "Int", int64(tv))
 	case int16:
-		if err := startValue(enc, "Int"); err != nil {
-			return err
-		}
-		err = enc.EncodeInt16(tv)
+		err = encodeInt(enc, "Int", int64(tv))
 	case int32:
-		if err := startValue(enc, "Int"); err != nil {
-			return err
-		}
-		err = enc.EncodeInt32(tv)
+		err = encodeInt(enc, "Int", int64(tv))
 	case int64:
-		if err := startValue(enc, "Int"); err != nil {
-			return err
-		}
-		err = enc.EncodeInt64(tv)
+		err = encodeInt(enc, "Int", int64(tv))
 	case uint:
 		if err := startValue(enc, "Int"); err != nil {
 			return err
 		}
 		err = enc.EncodeUint(uint64(tv))
 	case uint8:
-		if err := startValue(enc, "Int"); err != nil {
-			return err
-		}
-		err = enc.EncodeUint8(tv)
+		err = encodeInt(enc, "Int", int64(tv))
 	case uint16:
-		if err := startValue(enc, "Int"); err != nil {
-			return err
-		}
-		err = enc.EncodeUint16(tv)
+		err = encodeInt(enc, "Int", int64(tv))
 	case uint32:
-		if err := startValue(enc, "Int"); err != nil {
-			return err
-		}
-		err = enc.EncodeUint32(tv)
+		err = encodeInt(enc, "Int", int64(tv))
 	case uint64:
 		if err := startValue(enc, "Int"); err != nil {
 			return err
 		}
 		err = enc.EncodeUint64(tv)
 	case float32:
-		if err := startValue(enc, "Float"); err != nil {
-			return err
+		if err = startValue(enc, "Float"); err == nil {
+			err = enc.EncodeFloat32(tv)
 		}
-		err = enc.EncodeFloat32(tv)
 	case float64:
-		if err := startValue(enc, "Float"); err != nil {
-			return err
+		if err = startValue(enc, "Float"); err == nil {
+			err = enc.EncodeFloat64(tv)
 		}
-		err = enc.EncodeFloat64(tv)
 	case string:
-		if err := startValue(enc, "String"); err != nil {
-			return err
+		if err = startValue(enc, "String"); err == nil {
+			err = enc.EncodeString(tv)
 		}
-		err = enc.EncodeString(tv)
 	case []byte:
 		if err := startValue(enc, "Binary"); err != nil {
 			return err
@@ -243,22 +253,19 @@ func (v *Value) encodeMsgpack(enc *msgpack.Encoder, p *Plugin) error {
 	case []Value:
 		err = encodeValueList(enc, tv, p)
 	case Closure:
-		if err := startValue(enc, "Closure"); err != nil {
-			return err
+		if err = startValue(enc, "Closure"); err == nil {
+			err = enc.EncodeValue(reflect.ValueOf(&tv))
 		}
-		err = enc.EncodeValue(reflect.ValueOf(&tv))
 	case Block:
-		if err := startValue(enc, "Block"); err != nil {
-			return err
+		if err = startValue(enc, "Block"); err == nil {
+			err = enc.EncodeInt64(int64(tv))
 		}
-		err = enc.EncodeInt64(int64(tv))
 	case Glob:
 		err = encodeGlob(enc, &tv)
 	case IntRange:
-		if err := startValue(enc, "Range"); err != nil {
-			return err
+		if err = startValue(enc, "Range"); err == nil {
+			err = tv.EncodeMsgpack(enc)
 		}
-		err = tv.EncodeMsgpack(enc)
 	case error:
 		err = encodeLabeledError(enc, AsLabeledError(tv))
 	case LabeledError:
@@ -279,10 +286,9 @@ func (v *Value) encodeMsgpack(enc *msgpack.Encoder, p *Plugin) error {
 			p.cvals[id] = tv
 		}
 	case CellPath:
-		if err := startValue(enc, "CellPath"); err != nil {
-			return err
+		if err = startValue(enc, "CellPath"); err == nil {
+			err = tv.encodeMsgpack(enc, p)
 		}
-		err = tv.encodeMsgpack(enc, p)
 	default:
 		return fmt.Errorf("unsupported Value type %T", tv)
 	}
@@ -293,7 +299,7 @@ func (v *Value) encodeMsgpack(enc *msgpack.Encoder, p *Plugin) error {
 	if err := enc.EncodeString("span"); err != nil {
 		return err
 	}
-	if err := enc.EncodeValue(reflect.ValueOf(&v.Span)); err != nil {
+	if err := v.Span.encodeMsgpack(enc); err != nil {
 		return fmt.Errorf("encoding span: %w", err)
 	}
 
@@ -315,6 +321,13 @@ func startValue(enc *msgpack.Encoder, typeName string) error {
 		return err
 	}
 	return enc.EncodeString("val")
+}
+
+func encodeInt(enc *msgpack.Encoder, name string, v int64) error {
+	if err := startValue(enc, name); err != nil {
+		return err
+	}
+	return enc.EncodeInt(v)
 }
 
 func encodeValueList(enc *msgpack.Encoder, items []Value, p *Plugin) error {
@@ -485,7 +498,7 @@ func (v *Value) decodeValue(dec *msgpack.Decoder, typeName string, p *Plugin) er
 			err = dec.DecodeValue(reflect.ValueOf(&le))
 			v.Value = le
 		case "span":
-			err = dec.DecodeValue(reflect.ValueOf(&v.Span))
+			err = v.Span.decodeMsgpack(dec)
 		default:
 			return fmt.Errorf("unsupported Value field %q", fieldName)
 		}

@@ -83,6 +83,10 @@ func ToValue(v any) Value {
 }
 
 func rv2nv(v reflect.Value) Value {
+	if v.IsValid() && v.Type().Implements(reflect.TypeFor[CustomValue]()) {
+		return Value{Value: v.Interface()}
+	}
+
 	switch v.Kind() {
 	case reflect.Bool:
 		return Value{Value: v.Bool()}
