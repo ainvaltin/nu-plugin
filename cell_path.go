@@ -24,13 +24,13 @@ type PathMember interface {
 	// return either PathVariantInt or PathVariantString
 	Type() uint
 
-	// Integer returns uint value of the path member, should be called
+	// PathInt returns uint value of the path member, should be called
 	// only when Type returns PathVariantInt
-	Integer() uint
+	PathInt() uint
 
-	// String returns string value of the path member, should be called
+	// PathStr returns string value of the path member, should be called
 	// only when Type returns PathVariantString
-	String() string
+	PathStr() string
 
 	// Optional path members will not cause errors if they can't be
 	// accessed - the path access will just return Nothing instead.
@@ -142,14 +142,14 @@ func (pi pathItem[T]) Type() uint {
 	return PathVariantString
 }
 
-func (pi pathItem[T]) Integer() uint {
+func (pi pathItem[T]) PathInt() uint {
 	if v, ok := any(pi.value).(uint); ok {
 		return v
 	}
 	return math.MaxUint
 }
 
-func (pi pathItem[T]) String() string {
+func (pi pathItem[T]) PathStr() string {
 	if v, ok := any(pi.value).(string); ok {
 		return v
 	}

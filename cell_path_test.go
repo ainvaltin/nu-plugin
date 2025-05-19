@@ -88,10 +88,10 @@ func Test_CellPath_read(t *testing.T) {
 		if i := item.Type(); i != PathVariantInt {
 			t.Fatalf("expected type to be Int, got %d", i)
 		}
-		if i := item.Integer(); i != v {
+		if i := item.PathInt(); i != v {
 			t.Fatalf("expected value to be %d, got %d", v, i)
 		}
-		if s := item.String(); s != "" {
+		if s := item.PathStr(); s != "" {
 			t.Fatalf("expected string to be empty, got %q", s)
 		}
 		if o := item.Optional(); o != opt {
@@ -104,10 +104,10 @@ func Test_CellPath_read(t *testing.T) {
 		if i := item.Type(); i != PathVariantString {
 			t.Fatalf("expected type to be String, got %d", i)
 		}
-		if i := item.Integer(); i != math.MaxUint {
+		if i := item.PathInt(); i != math.MaxUint {
 			t.Fatalf("expected Integer to be MaxUint, got %x", i)
 		}
-		if s := item.String(); s != v {
+		if s := item.PathStr(); s != v {
 			t.Fatalf("expected value to be %q, got %q", v, s)
 		}
 		if o := item.Optional(); o != opt {
