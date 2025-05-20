@@ -2,6 +2,7 @@ package nu
 
 import (
 	"fmt"
+	"math"
 	"reflect"
 	"time"
 
@@ -174,18 +175,10 @@ func (v *Value) encodeMsgpack(enc *msgpack.Encoder, p *Plugin) error {
 	}
 
 	switch tv := v.Value.(type) {
-	case bool:
-		if err = startValue(enc, "Bool"); err == nil {
-			err = enc.EncodeBool(tv)
-		}
 	case Filesize:
 		err = encodeInt(enc, "Filesize", int64(tv))
 	case time.Duration:
 		err = encodeInt(enc, "Duration", tv.Nanoseconds())
-	case time.Time:
-		if err = startValue(enc, "Date"); err == nil {
-			err = enc.EncodeString(tv.Format(time.RFC3339))
-		}
 	case int:
 		err = encodeInt(enc, "Int", int64(tv))
 	case int8:
@@ -197,10 +190,7 @@ func (v *Value) encodeMsgpack(enc *msgpack.Encoder, p *Plugin) error {
 	case int64:
 		err = encodeInt(enc, "Int", int64(tv))
 	case uint:
-		if err := startValue(enc, "Int"); err != nil {
-			return err
-		}
-		err = enc.EncodeUint(uint64(tv))
+		err = encodeUInt(enc, uint64(tv))
 	case uint8:
 		err = encodeInt(enc, "Int", int64(tv))
 	case uint16:
@@ -208,10 +198,7 @@ func (v *Value) encodeMsgpack(enc *msgpack.Encoder, p *Plugin) error {
 	case uint32:
 		err = encodeInt(enc, "Int", int64(tv))
 	case uint64:
-		if err := startValue(enc, "Int"); err != nil {
-			return err
-		}
-		err = enc.EncodeUint64(tv)
+		err = encodeUInt(enc, tv)
 	case float32:
 		if err = startValue(enc, "Float"); err == nil {
 			err = enc.EncodeFloat32(tv)
@@ -219,6 +206,14 @@ func (v *Value) encodeMsgpack(enc *msgpack.Encoder, p *Plugin) error {
 	case float64:
 		if err = startValue(enc, "Float"); err == nil {
 			err = enc.EncodeFloat64(tv)
+		}
+	case bool:
+		if err = startValue(enc, "Bool"); err == nil {
+			err = enc.EncodeBool(tv)
+		}
+	case time.Time:
+		if err = startValue(enc, "Date"); err == nil {
+			err = enc.EncodeString(tv.Format(time.RFC3339))
 		}
 	case string:
 		if err = startValue(enc, "String"); err == nil {
@@ -328,6 +323,16 @@ func encodeInt(enc *msgpack.Encoder, name string, v int64) error {
 		return err
 	}
 	return enc.EncodeInt(v)
+}
+
+func encodeUInt(enc *msgpack.Encoder, v uint64) error {
+	if v > math.MaxInt64 {
+		return fmt.Errorf("uint %d is too large for int64", v)
+	}
+	if err := startValue(enc, "Int"); err != nil {
+		return err
+	}
+	return enc.EncodeUint(v)
 }
 
 func encodeValueList(enc *msgpack.Encoder, items []Value, p *Plugin) error {
