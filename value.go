@@ -264,7 +264,7 @@ func (v *Value) encodeMsgpack(enc *msgpack.Encoder, p *Plugin) error {
 		err = encodeGlob(enc, &tv)
 	case IntRange:
 		if err = startValue(enc, "Range"); err == nil {
-			err = tv.EncodeMsgpack(enc)
+			err = tv.encodeMsgpack(enc)
 		}
 	case error:
 		err = encodeLabeledError(enc, AsLabeledError(tv))

@@ -143,9 +143,7 @@ func (v *IntRange) countDown() iter.Seq[int64] {
 	}
 }
 
-var _ msgpack.CustomEncoder = (*IntRange)(nil)
-
-func (v *IntRange) EncodeMsgpack(enc *msgpack.Encoder) error {
+func (v *IntRange) encodeMsgpack(enc *msgpack.Encoder) error {
 	if err := v.Validate(); err != nil {
 		return fmt.Errorf("invalid IntRange definition: %w", err)
 	}
@@ -234,9 +232,7 @@ func (v *IntRange) decodeEndBound(dec *msgpack.Decoder) (err error) {
 	return err
 }
 
-var _ msgpack.CustomDecoder = (*IntRange)(nil)
-
-func (v *IntRange) DecodeMsgpack(dec *msgpack.Decoder) error {
+func (v *IntRange) decodeMsgpack(dec *msgpack.Decoder) error {
 	n, err := dec.DecodeMapLen()
 	if err != nil {
 		return err
@@ -276,7 +272,7 @@ func decodeMsgpackRange(dec *msgpack.Decoder) (any, error) {
 	switch name {
 	case "IntRange":
 		v := IntRange{}
-		return v, v.DecodeMsgpack(dec)
+		return v, v.decodeMsgpack(dec)
 	case "FloatRange":
 		return nil, fmt.Errorf("FloatRange is not implemented")
 	default:
