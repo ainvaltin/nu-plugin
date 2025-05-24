@@ -53,6 +53,7 @@ Outgoing values are encoded as:
   - bool -> Bool
   - []byte -> Binary
   - string -> String
+  - error -> LabeledError
   - [Filesize] -> Filesize
   - [time.Duration] -> Duration
   - [time.Time] -> Date
@@ -62,7 +63,6 @@ Outgoing values are encoded as:
   - [Closure] -> Closure
   - [Block] -> Block
   - [IntRange] -> Range
-  - error -> LabeledError
   - [CustomValue] -> Custom
   - [CellPath] -> CellPath
 
@@ -149,6 +149,44 @@ type Glob struct {
 
 type Record map[string]Value
 
+func (r Record) encodeMsgpack(enc *msgpack.Encoder, p *Plugin) error {
+	if err := startValue(enc, "Record"); err != nil {
+		return err
+	}
+	if err := enc.EncodeMapLen(len(r)); err != nil {
+		return err
+	}
+	for k, v := range r {
+		if err := enc.EncodeString(k); err != nil {
+			return err
+		}
+		if err := v.encodeMsgpack(enc, p); err != nil {
+			return fmt.Errorf("encode record field %s value: %w", k, err)
+		}
+	}
+	return nil
+}
+
+func decodeRecord(dec *msgpack.Decoder, p *Plugin) (rec Record, err error) {
+	var cnt int
+	if cnt, err = dec.DecodeMapLen(); err != nil {
+		return rec, fmt.Errorf("decoding Record field count: %w", err)
+	}
+	var name string
+	rec = Record{}
+	for range cnt {
+		if name, err = dec.DecodeString(); err != nil {
+			return rec, fmt.Errorf("decoding field name: %w", err)
+		}
+		var v Value
+		if err = v.decodeMsgpack(dec, p); err != nil {
+			return rec, fmt.Errorf("decoding field %s value: %w", name, err)
+		}
+		rec[name] = v
+	}
+	return rec, nil
+}
+
 /*
 Closure [Value] is a reference to a parsed block of Nushell code, with variables
 captured from scope.
@@ -232,10 +270,6 @@ func (v *Value) encodeMsgpack(enc *msgpack.Encoder, p *Plugin) error {
 	}
 
 	switch tv := v.Value.(type) {
-	case Filesize:
-		err = encodeInt(enc, "Filesize", int64(tv))
-	case time.Duration:
-		err = encodeInt(enc, "Duration", tv.Nanoseconds())
 	case int:
 		err = encodeInt(enc, "Int", int64(tv))
 	case int8:
@@ -256,6 +290,12 @@ func (v *Value) encodeMsgpack(enc *msgpack.Encoder, p *Plugin) error {
 		err = encodeInt(enc, "Int", int64(tv))
 	case uint64:
 		err = encodeUInt(enc, tv)
+	case Filesize:
+		err = encodeInt(enc, "Filesize", int64(tv))
+	case time.Duration:
+		err = encodeInt(enc, "Duration", tv.Nanoseconds())
+	case Block:
+		err = encodeInt(enc, "Block", int64(tv))
 	case float32:
 		if err = startValue(enc, "Float"); err == nil {
 			err = enc.EncodeFloat32(tv)
@@ -288,28 +328,13 @@ func (v *Value) encodeMsgpack(enc *msgpack.Encoder, p *Plugin) error {
 			err = enc.EncodeBytes(tv)
 		}
 	case Record:
-		if err := startValue(enc, "Record"); err != nil {
-			return err
-		}
-		if err := enc.EncodeMapLen(len(tv)); err != nil {
-			return err
-		}
-		for k, v := range tv {
-			if err := enc.EncodeString(k); err != nil {
-				return err
-			}
-			if err := v.encodeMsgpack(enc, p); err != nil {
-				return err
-			}
-		}
+		err = tv.encodeMsgpack(enc, p)
 	case []Value:
 		err = encodeValueList(enc, tv, p)
 	case Closure:
 		if err = startValue(enc, "Closure"); err == nil {
 			err = tv.encodeMsgpack(enc)
 		}
-	case Block:
-		err = encodeInt(enc, "Block", int64(tv))
 	case Glob:
 		err = encodeGlob(enc, &tv)
 	case IntRange:
@@ -499,23 +524,7 @@ func (v *Value) decodeValue(dec *msgpack.Decoder, typeName string, p *Plugin) er
 				}
 				v.Value, err = time.Parse(time.RFC3339, d)
 			case "Record":
-				var cnt int
-				if cnt, err = dec.DecodeMapLen(); err != nil {
-					break
-				}
-				var name string
-				rec := Record{}
-				for range cnt {
-					if name, err = dec.DecodeString(); err != nil {
-						break
-					}
-					var v Value
-					if err = v.decodeMsgpack(dec, p); err != nil {
-						break
-					}
-					rec[name] = v
-				}
-				v.Value = rec
+				v.Value, err = decodeRecord(dec, p)
 			case "Closure":
 				v.Value, err = decodeClosure(dec)
 			case "Block":
@@ -555,7 +564,7 @@ func (v *Value) decodeValue(dec *msgpack.Decoder, typeName string, p *Plugin) er
 		case "span":
 			err = v.Span.decodeMsgpack(dec)
 		default:
-			return fmt.Errorf("unsupported Value field %q", fieldName)
+			return fmt.Errorf("unsupported field %q in %s Value", fieldName, typeName)
 		}
 
 		if err != nil {
