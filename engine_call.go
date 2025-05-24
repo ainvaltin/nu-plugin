@@ -290,7 +290,8 @@ be nil, Value or stream).
 [EvalClosure engine call]: https://www.nushell.sh/contributor-book/plugin_protocol_reference.html#evalclosure-engine-call
 */
 func (ec *ExecCommand) EvalClosure(ctx context.Context, closure Value, args ...EvalArgument) (any, error) {
-	if _, ok := closure.Value.(Closure); !ok {
+	cv, ok := closure.Value.(Closure)
+	if !ok {
 		return nil, fmt.Errorf("closure argument must be of type Closure, got %T", closure.Value)
 	}
 
@@ -305,7 +306,7 @@ func (ec *ExecCommand) EvalClosure(ctx context.Context, closure Value, args ...E
 	type param struct {
 		Call *evalClosure `msgpack:"EvalClosure"`
 	}
-	ch, err := ec.p.engineCall(ctx, ec.callID, param{&evalClosure{closure: closure, cfg: cfg}})
+	ch, err := ec.p.engineCall(ctx, ec.callID, param{&evalClosure{closure: cv, span: closure.Span, cfg: cfg}})
 	if err != nil {
 		return nil, fmt.Errorf("engine call: %w", err)
 	}
@@ -321,7 +322,8 @@ func (ec *ExecCommand) EvalClosure(ctx context.Context, closure Value, args ...E
 }
 
 type evalClosure struct {
-	closure Value
+	closure Closure
+	span    Span
 	cfg     *evalArguments
 }
 
@@ -342,13 +344,13 @@ func (ec *evalClosure) EncodeMsgpack(enc *msgpack.Encoder) error {
 	if err := enc.EncodeString("item"); err != nil {
 		return err
 	}
-	if err := enc.EncodeValue(reflect.ValueOf(ec.closure.Value)); err != nil {
+	if err := ec.closure.encodeMsgpack(enc); err != nil {
 		return fmt.Errorf("encoding closure data: %w", err)
 	}
 	if err := enc.EncodeString("span"); err != nil {
 		return err
 	}
-	if err := enc.EncodeValue(reflect.ValueOf(&ec.closure.Span)); err != nil {
+	if err := ec.span.encodeMsgpack(enc); err != nil {
 		return err
 	}
 

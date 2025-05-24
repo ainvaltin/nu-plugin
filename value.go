@@ -157,8 +157,65 @@ The plugin should not try to inspect the contents of the closure. It is recommen
 that this is only used as an argument to the [ExecCommand.EvalClosure] engine call.
 */
 type Closure struct {
-	BlockID  uint               `msgpack:"block_id"`
-	Captures msgpack.RawMessage `msgpack:"captures"`
+	BlockID  uint
+	Captures msgpack.RawMessage
+}
+
+func (c Closure) encodeMsgpack(enc *msgpack.Encoder) error {
+	if err := enc.EncodeMapLen(2); err != nil {
+		return err
+	}
+	if err := enc.EncodeString("block_id"); err != nil {
+		return err
+	}
+	if err := enc.EncodeUint(uint64(c.BlockID)); err != nil {
+		return err
+	}
+	if err := enc.EncodeString("captures"); err != nil {
+		return err
+	}
+	if c.Captures == nil {
+		return enc.EncodeNil()
+	} else {
+		return c.Captures.EncodeMsgpack(enc)
+	}
+}
+
+func decodeClosure(dec *msgpack.Decoder) (c Closure, _ error) {
+	cnt, err := dec.DecodeMapLen()
+	if err != nil {
+		return c, err
+	}
+	if cnt != 2 {
+		return c, fmt.Errorf("expected Closure to contain 2 keys, got %d", cnt)
+	}
+
+	var code byte
+	for range cnt {
+		key, err := dec.DecodeString()
+		if err != nil {
+			return c, err
+		}
+		switch key {
+		case "block_id":
+			c.BlockID, err = dec.DecodeUint()
+		case "captures":
+			code, err = dec.PeekCode()
+			if err != nil {
+				return c, fmt.Errorf("peeking 'captures' value type: %w", err)
+			}
+			switch code {
+			case msgpcode.Nil:
+				err = dec.DecodeNil()
+			default:
+				err = c.Captures.DecodeMsgpack(dec)
+			}
+		}
+		if err != nil {
+			return c, fmt.Errorf("decoding key %q: %w", key, err)
+		}
+	}
+	return c, nil
 }
 
 /*
@@ -249,12 +306,10 @@ func (v *Value) encodeMsgpack(enc *msgpack.Encoder, p *Plugin) error {
 		err = encodeValueList(enc, tv, p)
 	case Closure:
 		if err = startValue(enc, "Closure"); err == nil {
-			err = enc.EncodeValue(reflect.ValueOf(&tv))
+			err = tv.encodeMsgpack(enc)
 		}
 	case Block:
-		if err = startValue(enc, "Block"); err == nil {
-			err = enc.EncodeInt64(int64(tv))
-		}
+		err = encodeInt(enc, "Block", int64(tv))
 	case Glob:
 		err = encodeGlob(enc, &tv)
 	case IntRange:
@@ -266,11 +321,8 @@ func (v *Value) encodeMsgpack(enc *msgpack.Encoder, p *Plugin) error {
 	case LabeledError:
 		err = encodeLabeledError(enc, &tv)
 	case nil:
-		if err := enc.EncodeString("Nothing"); err != nil {
-			return err
-		}
-		if err := enc.EncodeMapLen(1); err != nil {
-			return err
+		if err = enc.EncodeString("Nothing"); err == nil {
+			err = enc.EncodeMapLen(1)
 		}
 	case CustomValue:
 		if err := startValue(enc, "Custom"); err != nil {
@@ -465,9 +517,7 @@ func (v *Value) decodeValue(dec *msgpack.Decoder, typeName string, p *Plugin) er
 				}
 				v.Value = rec
 			case "Closure":
-				c := Closure{}
-				err = dec.DecodeValue(reflect.ValueOf(&c))
-				v.Value = c
+				v.Value, err = decodeClosure(dec)
 			case "Block":
 				var id int64
 				id, err = dec.DecodeInt64()
