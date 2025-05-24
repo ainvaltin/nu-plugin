@@ -627,7 +627,7 @@ func decodeGlob(dec *msgpack.Decoder, value *Value) error {
 		case "no_expand":
 			g.NoExpand, err = dec.DecodeBool()
 		case "span":
-			err = dec.DecodeValue(reflect.ValueOf(&value.Span))
+			err = value.Span.decodeMsgpack(dec)
 		default:
 			return fmt.Errorf("unsupported Glob Value field %q", fieldName)
 		}

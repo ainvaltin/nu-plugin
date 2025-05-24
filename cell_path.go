@@ -3,7 +3,6 @@ package nu
 import (
 	"fmt"
 	"math"
-	"reflect"
 
 	"github.com/vmihailenco/msgpack/v5"
 )
@@ -180,7 +179,7 @@ func (pi pathItem[T]) encodeMsgpack(enc *msgpack.Encoder, p *Plugin) error {
 	if err := enc.EncodeString("span"); err != nil {
 		return err
 	}
-	if err := enc.EncodeValue(reflect.ValueOf(&pi.span)); err != nil {
+	if err := pi.span.encodeMsgpack(enc); err != nil {
 		return fmt.Errorf("encoding span: %w", err)
 	}
 	return encodeBoolean(enc, "optional", pi.optional)
@@ -213,7 +212,7 @@ func decodePathMember(dec *msgpack.Decoder, p *Plugin) (PathMember, error) {
 				return nil, fmt.Errorf("unsupported CellPath val type %s", itemType)
 			}
 		case "span":
-			err = dec.DecodeValue(reflect.ValueOf(&span))
+			err = span.decodeMsgpack(dec)
 		case "optional":
 			opt, err = dec.DecodeBool()
 		}

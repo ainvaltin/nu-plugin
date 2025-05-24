@@ -265,7 +265,7 @@ func (cvo *customValueOp) readValue(dec *msgpack.Decoder) error {
 		case "item":
 			err = cvo.readCustomValueData(dec)
 		case "span":
-			err = dec.DecodeValue(reflect.ValueOf(&cvo.span))
+			err = cvo.span.decodeMsgpack(dec)
 		default:
 			return fmt.Errorf("unknown key %q under CustomValueOp[0]", key)
 		}
@@ -349,8 +349,7 @@ func (op *operation) decodeMsgpack(dec *msgpack.Decoder, p *Plugin) error {
 			// single item map like {"Math": "Plus"}
 			err = op.op.DecodeMsgpack(dec)
 		case "span":
-			var s Span
-			err = dec.DecodeValue(reflect.ValueOf(&s))
+			err = (&Span{}).decodeMsgpack(dec)
 		default:
 			return fmt.Errorf("unknown key %q under Operation", key)
 		}

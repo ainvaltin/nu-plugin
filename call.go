@@ -173,7 +173,7 @@ func (ec *evaluatedCall) decodeMsgpack(dec *msgpack.Decoder, p *Plugin) error {
 		}
 		switch key {
 		case "head":
-			err = dec.DecodeValue(reflect.ValueOf(&ec.Head))
+			err = ec.Head.decodeMsgpack(dec)
 		case "positional":
 			err = ec.Positional.decodeMsgpack(dec, p)
 		case "named":
