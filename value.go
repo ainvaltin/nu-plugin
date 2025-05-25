@@ -73,196 +73,6 @@ type Value struct {
 	Span  Span
 }
 
-type Span struct {
-	Start int `msgpack:"start"`
-	End   int `msgpack:"end"`
-}
-
-func (v Span) encodeMsgpack(enc *msgpack.Encoder) error {
-	if err := enc.EncodeMapLen(2); err != nil {
-		return err
-	}
-	if err := enc.EncodeString("start"); err != nil {
-		return err
-	}
-	if err := enc.EncodeInt(int64(v.Start)); err != nil {
-		return err
-	}
-	if err := enc.EncodeString("end"); err != nil {
-		return err
-	}
-	if err := enc.EncodeInt(int64(v.End)); err != nil {
-		return err
-	}
-	return nil
-}
-
-func (v *Span) decodeMsgpack(dec *msgpack.Decoder) error {
-	cnt, err := dec.DecodeMapLen()
-	if err != nil {
-		return err
-	}
-	if cnt != 2 {
-		return fmt.Errorf("expected span map to contain two keys, got %d", cnt)
-	}
-	for range cnt {
-		key, err := dec.DecodeString()
-		if err != nil {
-			return err
-		}
-		switch key {
-		case "start":
-			v.Start, err = dec.DecodeInt()
-		case "end":
-			v.End, err = dec.DecodeInt()
-		}
-		if err != nil {
-			return fmt.Errorf("decoding %s value: %w", key, err)
-		}
-	}
-	return nil
-}
-
-/*
-Filesize is Nushell [Filesize Value] type.
-
-[Filesize Value]: https://www.nushell.sh/contributor-book/plugin_protocol_reference.html#filesize
-*/
-type Filesize int64
-
-/*
-Glob is Nushell [Glob Value] type - a filesystem glob, selecting multiple files or
-directories depending on the expansion of wildcards.
-
-Note that [Go stdlib glob] implementation doesn't support doublestar / globstar
-pattern but thirdparty libraries which do exist.
-
-[Glob Value]: https://www.nushell.sh/contributor-book/plugin_protocol_reference.html#glob
-[Go stdlib glob]: https://pkg.go.dev/path/filepath#Glob
-*/
-type Glob struct {
-	Value string
-	// If true, the expansion of wildcards is disabled and Value should be treated
-	// as a literal path.
-	NoExpand bool
-}
-
-type Record map[string]Value
-
-func (r Record) encodeMsgpack(enc *msgpack.Encoder, p *Plugin) error {
-	if err := startValue(enc, "Record"); err != nil {
-		return err
-	}
-	if err := enc.EncodeMapLen(len(r)); err != nil {
-		return err
-	}
-	for k, v := range r {
-		if err := enc.EncodeString(k); err != nil {
-			return err
-		}
-		if err := v.encodeMsgpack(enc, p); err != nil {
-			return fmt.Errorf("encode record field %s value: %w", k, err)
-		}
-	}
-	return nil
-}
-
-func decodeRecord(dec *msgpack.Decoder, p *Plugin) (rec Record, err error) {
-	var cnt int
-	if cnt, err = dec.DecodeMapLen(); err != nil {
-		return rec, fmt.Errorf("decoding Record field count: %w", err)
-	}
-	var name string
-	rec = Record{}
-	for range cnt {
-		if name, err = dec.DecodeString(); err != nil {
-			return rec, fmt.Errorf("decoding field name: %w", err)
-		}
-		var v Value
-		if err = v.decodeMsgpack(dec, p); err != nil {
-			return rec, fmt.Errorf("decoding field %s value: %w", name, err)
-		}
-		rec[name] = v
-	}
-	return rec, nil
-}
-
-/*
-Closure [Value] is a reference to a parsed block of Nushell code, with variables
-captured from scope.
-
-The plugin should not try to inspect the contents of the closure. It is recommended
-that this is only used as an argument to the [ExecCommand.EvalClosure] engine call.
-*/
-type Closure struct {
-	BlockID  uint
-	Captures msgpack.RawMessage
-}
-
-func (c Closure) encodeMsgpack(enc *msgpack.Encoder) error {
-	if err := enc.EncodeMapLen(2); err != nil {
-		return err
-	}
-	if err := enc.EncodeString("block_id"); err != nil {
-		return err
-	}
-	if err := enc.EncodeUint(uint64(c.BlockID)); err != nil {
-		return err
-	}
-	if err := enc.EncodeString("captures"); err != nil {
-		return err
-	}
-	if c.Captures == nil {
-		return enc.EncodeNil()
-	} else {
-		return c.Captures.EncodeMsgpack(enc)
-	}
-}
-
-func decodeClosure(dec *msgpack.Decoder) (c Closure, _ error) {
-	cnt, err := dec.DecodeMapLen()
-	if err != nil {
-		return c, err
-	}
-	if cnt != 2 {
-		return c, fmt.Errorf("expected Closure to contain 2 keys, got %d", cnt)
-	}
-
-	var code byte
-	for range cnt {
-		key, err := dec.DecodeString()
-		if err != nil {
-			return c, err
-		}
-		switch key {
-		case "block_id":
-			c.BlockID, err = dec.DecodeUint()
-		case "captures":
-			code, err = dec.PeekCode()
-			if err != nil {
-				return c, fmt.Errorf("peeking 'captures' value type: %w", err)
-			}
-			switch code {
-			case msgpcode.Nil:
-				err = dec.DecodeNil()
-			default:
-				err = c.Captures.DecodeMsgpack(dec)
-			}
-		}
-		if err != nil {
-			return c, fmt.Errorf("decoding key %q: %w", key, err)
-		}
-	}
-	return c, nil
-}
-
-/*
-Block is Nushell [Block Value] type.
-
-[Block Value]: https://www.nushell.sh/contributor-book/plugin_protocol_reference.html#block
-*/
-type Block uint64
-
 func (v *Value) encodeMsgpack(enc *msgpack.Encoder, p *Plugin) error {
 	err := enc.EncodeMapLen(1)
 	if err != nil {
@@ -281,7 +91,7 @@ func (v *Value) encodeMsgpack(enc *msgpack.Encoder, p *Plugin) error {
 	case int64:
 		err = encodeInt(enc, "Int", int64(tv))
 	case uint:
-		err = encodeUInt(enc, uint64(tv))
+		err = encodeUInt(enc, "Int", uint64(tv))
 	case uint8:
 		err = encodeInt(enc, "Int", int64(tv))
 	case uint16:
@@ -289,13 +99,13 @@ func (v *Value) encodeMsgpack(enc *msgpack.Encoder, p *Plugin) error {
 	case uint32:
 		err = encodeInt(enc, "Int", int64(tv))
 	case uint64:
-		err = encodeUInt(enc, tv)
+		err = encodeUInt(enc, "Int", tv)
 	case Filesize:
 		err = encodeInt(enc, "Filesize", int64(tv))
 	case time.Duration:
 		err = encodeInt(enc, "Duration", tv.Nanoseconds())
 	case Block:
-		err = encodeInt(enc, "Block", int64(tv))
+		err = encodeUInt(enc, "Block", uint64(tv))
 	case float32:
 		if err = startValue(enc, "Float"); err == nil {
 			err = enc.EncodeFloat32(tv)
@@ -336,15 +146,15 @@ func (v *Value) encodeMsgpack(enc *msgpack.Encoder, p *Plugin) error {
 			err = tv.encodeMsgpack(enc)
 		}
 	case Glob:
-		err = encodeGlob(enc, &tv)
+		err = tv.encodeGlob(enc)
 	case IntRange:
 		if err = startValue(enc, "Range"); err == nil {
 			err = tv.encodeMsgpack(enc)
 		}
 	case error:
-		err = encodeLabeledError(enc, AsLabeledError(tv))
+		err = AsLabeledError(tv).encodeMsgpack(enc)
 	case LabeledError:
-		err = encodeLabeledError(enc, &tv)
+		err = tv.encodeMsgpack(enc)
 	case nil:
 		if err = enc.EncodeString("Nothing"); err == nil {
 			err = enc.EncodeMapLen(1)
@@ -402,11 +212,11 @@ func encodeInt(enc *msgpack.Encoder, name string, v int64) error {
 	return enc.EncodeInt(v)
 }
 
-func encodeUInt(enc *msgpack.Encoder, v uint64) error {
+func encodeUInt(enc *msgpack.Encoder, name string, v uint64) error {
 	if v > math.MaxInt64 {
 		return fmt.Errorf("uint %d is too large for int64", v)
 	}
-	if err := startValue(enc, "Int"); err != nil {
+	if err := startValue(enc, name); err != nil {
 		return err
 	}
 	return enc.EncodeUint(v)
@@ -431,42 +241,6 @@ func encodeValueList(enc *msgpack.Encoder, items []Value, p *Plugin) error {
 		}
 	}
 	return nil
-}
-
-// encode Glob value minus the Span member of the Value
-func encodeGlob(enc *msgpack.Encoder, glob *Glob) error {
-	if err := enc.EncodeString("Glob"); err != nil {
-		return err
-	}
-	if err := enc.EncodeMapLen(3); err != nil {
-		return err
-	}
-	if err := enc.EncodeString("val"); err != nil {
-		return err
-	}
-	if err := enc.EncodeString(glob.Value); err != nil {
-		return err
-	}
-	if err := enc.EncodeString("no_expand"); err != nil {
-		return err
-	}
-	if err := enc.EncodeBool(glob.NoExpand); err != nil {
-		return err
-	}
-	return nil
-}
-
-func encodeLabeledError(enc *msgpack.Encoder, le *LabeledError) error {
-	if err := enc.EncodeString("Error"); err != nil {
-		return err
-	}
-	if err := enc.EncodeMapLen(2); err != nil {
-		return err
-	}
-	if err := enc.EncodeString("error"); err != nil {
-		return err
-	}
-	return enc.EncodeValue(reflect.ValueOf(le))
 }
 
 func (v *Value) decodeMsgpack(dec *msgpack.Decoder, p *Plugin) error {
@@ -546,17 +320,7 @@ func (v *Value) decodeValue(dec *msgpack.Decoder, typeName string, p *Plugin) er
 			if typeName != "List" {
 				return fmt.Errorf("expected type to be 'List', got %q", typeName)
 			}
-			cnt, err := dec.DecodeArrayLen()
-			if err != nil {
-				return err
-			}
-			lst := make([]Value, cnt)
-			for i := 0; i < cnt; i++ {
-				if err := lst[i].decodeMsgpack(dec, p); err != nil {
-					return fmt.Errorf("decoding List item [%d/%d]: %w", i+1, cnt, err)
-				}
-			}
-			v.Value = lst
+			v.Value, err = decodeValueList(dec, p)
 		case "error":
 			le := LabeledError{}
 			err = dec.DecodeValue(reflect.ValueOf(&le))
@@ -573,6 +337,20 @@ func (v *Value) decodeValue(dec *msgpack.Decoder, typeName string, p *Plugin) er
 	}
 
 	return nil
+}
+
+func decodeValueList(dec *msgpack.Decoder, p *Plugin) ([]Value, error) {
+	cnt, err := dec.DecodeArrayLen()
+	if err != nil {
+		return nil, err
+	}
+	lst := make([]Value, cnt)
+	for i := range cnt {
+		if err := lst[i].decodeMsgpack(dec, p); err != nil {
+			return nil, fmt.Errorf("decoding List item [%d/%d]: %w", i+1, cnt, err)
+		}
+	}
+	return lst, nil
 }
 
 func decodeBinary(dec *msgpack.Decoder) ([]byte, error) {
@@ -605,36 +383,52 @@ func decodeBinary(dec *msgpack.Decoder) ([]byte, error) {
 	}
 }
 
-// the enclosing map has been red and we need to decode the struct itself.
-func decodeGlob(dec *msgpack.Decoder, value *Value) error {
-	n, err := dec.DecodeMapLen()
+type Span struct {
+	Start int `msgpack:"start"`
+	End   int `msgpack:"end"`
+}
+
+func (v Span) encodeMsgpack(enc *msgpack.Encoder) error {
+	if err := enc.EncodeMapLen(2); err != nil {
+		return err
+	}
+	if err := enc.EncodeString("start"); err != nil {
+		return err
+	}
+	if err := enc.EncodeInt(int64(v.Start)); err != nil {
+		return err
+	}
+	if err := enc.EncodeString("end"); err != nil {
+		return err
+	}
+	if err := enc.EncodeInt(int64(v.End)); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (v *Span) decodeMsgpack(dec *msgpack.Decoder) error {
+	cnt, err := dec.DecodeMapLen()
 	if err != nil {
 		return err
 	}
-	if n == -1 {
-		return nil
+	if cnt != 2 {
+		return fmt.Errorf("expected span map to contain two keys, got %d", cnt)
 	}
-
-	g := Glob{}
-	for idx := 0; idx < n; idx++ {
-		fieldName, err := dec.DecodeString()
+	for range cnt {
+		key, err := dec.DecodeString()
 		if err != nil {
-			return fmt.Errorf("decoding field name [%d/%d] of Glob: %w", idx+1, n, err)
+			return err
 		}
-		switch fieldName {
-		case "val":
-			g.Value, err = dec.DecodeString()
-		case "no_expand":
-			g.NoExpand, err = dec.DecodeBool()
-		case "span":
-			err = value.Span.decodeMsgpack(dec)
-		default:
-			return fmt.Errorf("unsupported Glob Value field %q", fieldName)
+		switch key {
+		case "start":
+			v.Start, err = dec.DecodeInt()
+		case "end":
+			v.End, err = dec.DecodeInt()
 		}
 		if err != nil {
-			return fmt.Errorf("decoding field %s of Glob: %w", fieldName, err)
+			return fmt.Errorf("decoding %s value: %w", key, err)
 		}
 	}
-	value.Value = g
 	return nil
 }
