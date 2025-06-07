@@ -61,6 +61,21 @@ func (r boltValue) FollowPathString(ctx context.Context, item string) (nu.Value,
 			return nil
 		})
 		return nu.Value{Value: buf}, err
+	case "size":
+		v := nu.Value{}
+		err := r.db.View(func(tx *bbolt.Tx) error {
+			b, err := r.goToBucket(tx)
+			if err != nil {
+				return err
+			}
+			if r.kind == kindKey {
+				v.Value = nu.Filesize(len(b.Get(r.name[len(r.name)-1])))
+			} else {
+				v.Value = b.Inspect().KeyN
+			}
+			return nil
+		})
+		return v, err
 	case "keys":
 		var items []nu.Value
 		err := r.db.View(func(tx *bbolt.Tx) error {
