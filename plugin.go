@@ -335,7 +335,7 @@ func (p *Plugin) getInput(ctx context.Context, input any) (any, error) {
 		p.iom.Unlock()
 		ls.Run(ctx)
 		return ls.rdr, nil
-	case LabeledError:
+	case Error:
 		return nil, &it
 	default:
 		return nil, fmt.Errorf("unsupported input type: %T", it)
@@ -484,20 +484,4 @@ func (p *Plugin) serialize(data any) (_ []byte, err error) {
 		err = enc.Encode(data)
 	}
 	return buf.Bytes(), err
-}
-
-func (p *Plugin) deserialize(data []byte, v any) error {
-	type mpe interface {
-		decodeMsgpack(*msgpack.Decoder, *Plugin) error
-	}
-
-	dec := msgpack.GetDecoder()
-	defer msgpack.PutDecoder(dec)
-	dec.UsePreallocateValues(true)
-	dec.Reset(bytes.NewReader(data))
-	if f, ok := v.(mpe); ok {
-		return f.decodeMsgpack(dec, p)
-	}
-
-	return dec.Decode(v)
 }

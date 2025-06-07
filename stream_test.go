@@ -2,6 +2,7 @@ package nu
 
 import (
 	"bytes"
+	"errors"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -14,7 +15,7 @@ func Test_Data_DeEncode_happy(t *testing.T) {
 	testCases := []data{
 		{ID: 3, Data: Value{Value: "Hello, world!", Span: Span{Start: 40000, End: 40015}}},
 		{ID: 7, Data: []byte{0xf0, 0xff, 0x00}},
-		{ID: 8, Data: LabeledError{Msg: "disconnected"}},
+		{ID: 8, Data: Error{Err: errors.New("disconnected")}},
 	}
 
 	p := Plugin{}
@@ -34,7 +35,7 @@ func Test_Data_DeEncode_happy(t *testing.T) {
 			continue
 		}
 
-		if diff := cmp.Diff(tc, dv); diff != "" {
+		if diff := cmp.Diff(tc, dv, cmp.Comparer(compareErrors)); diff != "" {
 			t.Errorf("[%d] mismatch (-want +got):\n%s", x, diff)
 		}
 	}

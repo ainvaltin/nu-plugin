@@ -3,7 +3,6 @@ package nu
 import (
 	"fmt"
 	"math"
-	"reflect"
 	"time"
 
 	"github.com/vmihailenco/msgpack/v5"
@@ -152,9 +151,7 @@ func (v *Value) encodeMsgpack(enc *msgpack.Encoder, p *Plugin) error {
 			err = tv.encodeMsgpack(enc)
 		}
 	case error:
-		err = AsLabeledError(tv).encodeMsgpack(enc)
-	case LabeledError:
-		err = tv.encodeMsgpack(enc)
+		err = encodeLabeledErrorValue(enc, flattenError(tv))
 	case nil:
 		if err = enc.EncodeString("Nothing"); err == nil {
 			err = enc.EncodeMapLen(1)
@@ -243,6 +240,19 @@ func encodeValueList(enc *msgpack.Encoder, items []Value, p *Plugin) error {
 	return nil
 }
 
+func encodeLabeledErrorValue(enc *msgpack.Encoder, le *Error) error {
+	if err := enc.EncodeString("Error"); err != nil {
+		return err
+	}
+	if err := enc.EncodeMapLen(2); err != nil {
+		return err
+	}
+	if err := enc.EncodeString("error"); err != nil {
+		return err
+	}
+	return le.encodeMsgpack(enc)
+}
+
 func (v *Value) decodeMsgpack(dec *msgpack.Decoder, p *Plugin) error {
 	name, err := decodeWrapperMap(dec)
 	if err != nil {
@@ -322,9 +332,7 @@ func (v *Value) decodeValue(dec *msgpack.Decoder, typeName string, p *Plugin) er
 			}
 			v.Value, err = decodeValueList(dec, p)
 		case "error":
-			le := LabeledError{}
-			err = dec.DecodeValue(reflect.ValueOf(&le))
-			v.Value = le
+			v.Value, err = decodeLabeledError(dec)
 		case "span":
 			err = v.Span.decodeMsgpack(dec)
 		default:

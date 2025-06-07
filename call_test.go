@@ -3,7 +3,6 @@ package nu
 import (
 	"bytes"
 	"fmt"
-	"reflect"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -200,16 +199,13 @@ func (cr *callResponse) decodeMsgpack(dec *msgpack.Decoder, p *Plugin) (err erro
 	switch name {
 	case "PipelineData":
 		pd := pipelineData{}
-		if err := pd.DecodeMsgpack(dec, p); err != nil {
+		if err := pd.decodeMsgpack(dec, p); err != nil {
 			return err
 		}
 		cr.Response = pd
 	case "Error":
-		e := LabeledError{}
-		if err := dec.DecodeValue(reflect.ValueOf(&e)); err != nil {
-			return err
-		}
-		cr.Response = e
+		cr.Response, err = decodeLabeledError(dec)
+		return err
 	default:
 		return fmt.Errorf("unexpected CallResponse key %q", name)
 	}

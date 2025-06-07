@@ -2,7 +2,6 @@ package nu
 
 import (
 	"fmt"
-	"reflect"
 
 	"github.com/vmihailenco/msgpack/v5"
 )
@@ -86,11 +85,8 @@ func (d *data) decodeMsgpack(dec *msgpack.Decoder, p *Plugin) error {
 				return fmt.Errorf("reading raw data: %w", err)
 			}
 		case "Err":
-			e := LabeledError{}
-			if err := dec.DecodeValue(reflect.ValueOf(&e)); err != nil {
-				return err
-			}
-			d.Data = e
+			d.Data, err = decodeLabeledError(dec)
+			return err
 		default:
 			return fmt.Errorf("unexpected key %q under Raw", keyName)
 		}
@@ -122,20 +118,18 @@ func (d *data) encodeMsgpack(enc *msgpack.Encoder, p *Plugin) error {
 	case error:
 		// if the Data contains error it must be a Raw stream, in case of
 		// List stream the error must be wrapped into a Value.
-		return encodeLabeledErrorToRawStream(enc, AsLabeledError(v))
-	case LabeledError:
-		return encodeLabeledErrorToRawStream(enc, AsLabeledError(&v))
+		return encodeLabeledErrorToRawStream(enc, flattenError(v))
 	default:
 		return fmt.Errorf("unsupported Data value: %T", v)
 	}
 }
 
-func encodeLabeledErrorToRawStream(enc *msgpack.Encoder, le *LabeledError) error {
+func encodeLabeledErrorToRawStream(enc *msgpack.Encoder, le *Error) error {
 	if err := encodeMapStart(enc, "Raw"); err != nil {
 		return err
 	}
 	if err := encodeMapStart(enc, "Err"); err != nil {
 		return err
 	}
-	return enc.EncodeValue(reflect.ValueOf(le))
+	return le.encodeMsgpack(enc)
 }

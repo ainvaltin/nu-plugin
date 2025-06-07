@@ -378,10 +378,8 @@ func (cr *callResponse) encodeMsgpack(enc *msgpack.Encoder, p *Plugin) error {
 		return dt.encodeMsgpack(enc, p)
 	case *pipelineData:
 		return dt.encodeMsgpack(enc, p)
-	case *LabeledError:
-		return encodeErrorResponse(enc, dt)
 	case error:
-		return encodeErrorResponse(enc, AsLabeledError(dt))
+		return encodeErrorResponse(enc, flattenError(dt))
 	case metadata:
 		if err := encodeMapStart(enc, "Metadata"); err != nil {
 			return err
@@ -407,11 +405,11 @@ func (cr *callResponse) encodeMsgpack(enc *msgpack.Encoder, p *Plugin) error {
 	}
 }
 
-func encodeErrorResponse(enc *msgpack.Encoder, le *LabeledError) error {
+func encodeErrorResponse(enc *msgpack.Encoder, le *Error) error {
 	if err := encodeMapStart(enc, "Error"); err != nil {
 		return err
 	}
-	return enc.EncodeValue(reflect.ValueOf(le))
+	return le.encodeMsgpack(enc)
 }
 
 func (pd *pipelineData) encodeMsgpack(enc *msgpack.Encoder, p *Plugin) error {
@@ -422,7 +420,7 @@ func (pd *pipelineData) encodeMsgpack(enc *msgpack.Encoder, p *Plugin) error {
 	return encodePipelineDataHeader(enc, pd.Data, p)
 }
 
-func (pd *pipelineData) DecodeMsgpack(dec *msgpack.Decoder, p *Plugin) (err error) {
+func (pd *pipelineData) decodeMsgpack(dec *msgpack.Decoder, p *Plugin) (err error) {
 	pd.Data, err = decodePipelineDataHeader(dec, p)
 	return err
 }

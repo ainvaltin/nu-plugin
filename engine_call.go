@@ -32,7 +32,7 @@ func (cr *engineCallResponse) decodeMsgpack(dec *msgpack.Decoder, p *Plugin) (er
 	switch name {
 	case "PipelineData":
 		pd := pipelineData{}
-		if err := pd.DecodeMsgpack(dec, p); err != nil {
+		if err := pd.decodeMsgpack(dec, p); err != nil {
 			return fmt.Errorf("decoding PipelineData of EngineCallResponse: %w", err)
 		}
 		cr.Response = pd
@@ -53,11 +53,8 @@ func (cr *engineCallResponse) decodeMsgpack(dec *msgpack.Decoder, p *Plugin) (er
 		}
 		cr.Response = m
 	case "Error":
-		e := LabeledError{}
-		if err := dec.DecodeValue(reflect.ValueOf(&e)); err != nil {
-			return err
-		}
-		cr.Response = e
+		cr.Response, err = decodeLabeledError(dec)
+		return err
 	default:
 		return fmt.Errorf("unexpected EngineCallResponse key %q", name)
 	}
@@ -272,7 +269,7 @@ func (ec *ExecCommand) engineCallValueReturn(ctx context.Context, arg any) (*Val
 			return nil, nil
 		case Value:
 			return &tv, nil
-		case LabeledError:
+		case Error:
 			return nil, &tv
 		default:
 			return nil, fmt.Errorf("unexpected return value of type %T", tv)

@@ -62,7 +62,7 @@ func decodeNuMsgAll(p *Plugin, next func(d *msgpack.Decoder, name string) (_ int
 			return cr, cr.decodeMsgpack(dec, p)
 		case "PipelineData":
 			cr := pipelineData{}
-			return cr, cr.DecodeMsgpack(dec, p)
+			return cr, cr.decodeMsgpack(dec, p)
 		default:
 			return next(dec, name)
 		}
@@ -82,4 +82,20 @@ func expectErrorMsg(t *testing.T, err error, msg string) {
 	if diff := cmp.Diff(err.Error(), msg); diff != "" {
 		t.Errorf("error message mismatch (-want +got):\n%s", diff)
 	}
+}
+
+func (p *Plugin) deserialize(data []byte, v any) error {
+	type mpe interface {
+		decodeMsgpack(*msgpack.Decoder, *Plugin) error
+	}
+
+	dec := msgpack.GetDecoder()
+	defer msgpack.PutDecoder(dec)
+	dec.UsePreallocateValues(true)
+	dec.Reset(bytes.NewReader(data))
+	if f, ok := v.(mpe); ok {
+		return f.decodeMsgpack(dec, p)
+	}
+
+	return dec.Decode(v)
 }

@@ -1,4 +1,10 @@
 
+## [2025-06-07]
+Error types/propagation overhaul:
+- Rename types: `LabeledError` -> `Error`, `ErrorLabel` -> `Label`;
+- Encode/decode errors without reflection;
+- Drop `AsLabeledError` function;
+
 ## [2025-05-18]
 - Change field `Flag.Short` type from `string` to `rune`.
 - Drop `Examples` type, use `[]Example` instead.

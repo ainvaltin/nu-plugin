@@ -202,7 +202,7 @@ func Test_Plugin_response(t *testing.T) {
 
 		runEngine(t, p, append(protocolPrelude,
 			msgDef{send: &call{ID: 1, Call: run{Name: "inc"}}},
-			msgDef{recv: callResponse{ID: 1, Response: LabeledError{Msg: "sorry"}}},
+			msgDef{recv: callResponse{ID: 1, Response: Error{Err: errors.New("sorry")}}},
 		))
 	})
 
@@ -464,7 +464,7 @@ func runEngine(t *testing.T, p *Plugin, msg []msgDef) {
 				if err != nil {
 					errch <- fmt.Errorf("decoding msg [%d]: %w", k, err)
 				}
-				if diff := cmp.Diff(v.recv, inmsg); diff != "" {
+				if diff := cmp.Diff(v.recv, inmsg, cmp.Comparer(compareErrors)); diff != "" {
 					errch <- fmt.Errorf("[%d] message mismatch (-want +got):\n%s", k, diff)
 				}
 			} else {

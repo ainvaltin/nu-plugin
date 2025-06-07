@@ -1,6 +1,7 @@
 package nu
 
 import (
+	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -45,9 +46,9 @@ func Test_Value_DeEncode(t *testing.T) {
 		{in: Value{Value: Record{"foo": Value{Value: "bar"}, "int": Value{Value: 12}}}, out: Value{Value: Record{"foo": Value{Value: "bar"}, "int": Value{Value: int64(12)}}}},
 		{in: Value{Value: []Value{}}, out: Value{Value: []Value{}}},
 		{in: Value{Value: []Value{{Value: "first"}, {Value: 13}}}, out: Value{Value: []Value{{Value: "first"}, {Value: int64(13)}}}},
-		{in: Value{Value: fmt.Errorf("oops")}, out: Value{Value: LabeledError{Msg: "oops"}}},
+		{in: Value{Value: fmt.Errorf("oops")}, out: Value{Value: Error{Err: errors.New("oops")}}},
 		{in: Value{Value: Closure{BlockID: 8}}, out: Value{Value: Closure{BlockID: 8}}},
-		{in: Value{Value: Closure{BlockID: 8, Captures: []byte{144}}}, out: Value{Value: Closure{BlockID: 8, Captures: []byte{144}}}},
+		{in: Value{Value: Closure{BlockID: 8, Captures: []byte{144}}}, out: Value{Value: Closure{BlockID: 8, Captures: []byte{0x90}}}},
 		{in: Value{Value: Glob{Value: "[a-z].txt", NoExpand: false}}, out: Value{Value: Glob{Value: "[a-z].txt", NoExpand: false}}},
 		{in: Value{Value: Glob{Value: "**/*.txt", NoExpand: true}}, out: Value{Value: Glob{Value: "**/*.txt", NoExpand: true}}},
 		{in: Value{Value: Glob{Value: "foo.txt"}, Span: Span{Start: 1, End: 8}}, out: Value{Value: Glob{Value: "foo.txt"}, Span: Span{Start: 1, End: 8}}},
@@ -69,7 +70,7 @@ func Test_Value_DeEncode(t *testing.T) {
 			continue
 		}
 
-		if diff := cmp.Diff(dv, tc.out); diff != "" {
+		if diff := cmp.Diff(dv, tc.out, cmp.Comparer(compareErrors)); diff != "" {
 			t.Errorf("[%d] encoding %T mismatch (-input +output):\n%s", x, tc.in.Value, diff)
 		}
 	}
