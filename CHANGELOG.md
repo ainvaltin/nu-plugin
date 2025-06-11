@@ -1,4 +1,8 @@
 
+## [2025-06-11]
+- Plugin protocol version 0.105.0
+- CellPath's PathMember has now CaseSensitive property;
+
 ## [2025-06-07]
 Error types/propagation overhaul:
 - Rename types: `LabeledError` -> `Error`, `ErrorLabel` -> `Label`;

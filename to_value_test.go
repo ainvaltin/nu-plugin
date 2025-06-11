@@ -249,7 +249,7 @@ func Test_rv2nv(t *testing.T) {
 	t.Run("CellPath", func(t *testing.T) {
 		cp := CellPath{}
 		cp.AddInteger(10, false)
-		cp.AddString("field", true)
+		cp.AddString("field", true, true)
 
 		v := rv2nv(reflect.ValueOf(cp))
 		if diff := cmp.Diff(cp, v.Value, cmpopts.EquateComparable(pathItem[uint]{}, pathItem[string]{})); diff != "" {

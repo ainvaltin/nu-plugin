@@ -10,8 +10,9 @@ import (
 
 func Test_CellPath_Encode(t *testing.T) {
 	cp := CellPath{}
-	cp.AddStringSpan("title", false, Span{10, 20})
+	cp.AddStringSpan("title", false, true, Span{10, 20})
 	cp.AddInteger(2, true)
+	cp.AddStringSpan("name", false, false, Span{30, 40})
 	v := Value{Value: cp}
 
 	p := &Plugin{}
@@ -63,20 +64,20 @@ func Test_CellPath_Add(t *testing.T) {
 		cp := CellPath{}
 		expectedLength(t, cp, 0)
 
-		cp.AddString("foo", false)
+		cp.AddString("foo", false, false)
 		expectedLength(t, cp, 1)
-		cp.AddString("bar", true)
+		cp.AddString("bar", true, true)
 		expectedLength(t, cp, 2)
-		if s := cp.String(); s != "foo.bar?" {
-			t.Errorf("expected path to be 'foo.bar?', got %q", s)
+		if diff := cmp.Diff("foo!.bar?", cp.String()); diff != "" {
+			t.Errorf("mismatch (-expected +actual):\n%s", diff)
 		}
 
-		cp.AddStringSpan("zoo", false, Span{5, 6})
+		cp.AddStringSpan("zoo", false, true, Span{5, 6})
 		expectedLength(t, cp, 3)
-		cp.AddStringSpan("buz", true, Span{8, 9})
+		cp.AddStringSpan("buz", true, false, Span{8, 9})
 		expectedLength(t, cp, 4)
-		if s := cp.String(); s != "foo.bar?.zoo.buz?" {
-			t.Errorf("expected path to be 'foo.bar?', got %q", s)
+		if diff := cmp.Diff("foo!.bar?.zoo.buz?!", cp.String()); diff != "" {
+			t.Errorf("mismatch (-expected +actual):\n%s", diff)
 		}
 	})
 }
@@ -97,9 +98,12 @@ func Test_CellPath_read(t *testing.T) {
 		if o := item.Optional(); o != opt {
 			t.Fatalf("expected Optional to be %t, got %t", opt, o)
 		}
+		if o := item.CaseSensitive(); o != true {
+			t.Fatalf("expected CaseSensitive to be %t, got %t", true, o)
+		}
 	}
 
-	checkItemStr := func(t *testing.T, item PathMember, v string, opt bool) {
+	checkItemStr := func(t *testing.T, item PathMember, v string, opt, cs bool) {
 		t.Helper()
 		if i := item.Type(); i != PathVariantString {
 			t.Fatalf("expected type to be String, got %d", i)
@@ -113,16 +117,19 @@ func Test_CellPath_read(t *testing.T) {
 		if o := item.Optional(); o != opt {
 			t.Fatalf("expected Optional to be %t, got %t", opt, o)
 		}
+		if o := item.CaseSensitive(); o != cs {
+			t.Fatalf("expected CaseSensitive to be %t, got %t", cs, o)
+		}
 	}
 
 	cp := CellPath{}
 	cp.AddInteger(8, false)
-	cp.AddString("first", false)
+	cp.AddString("first", false, true)
 	cp.AddInteger(4, true)
-	cp.AddString("second", true)
+	cp.AddString("second", true, false)
 
 	checkItemInt(t, cp.Members[0], 8, false)
-	checkItemStr(t, cp.Members[1], "first", false)
+	checkItemStr(t, cp.Members[1], "first", false, true)
 	checkItemInt(t, cp.Members[2], 4, true)
-	checkItemStr(t, cp.Members[3], "second", true)
+	checkItemStr(t, cp.Members[3], "second", true, false)
 }
