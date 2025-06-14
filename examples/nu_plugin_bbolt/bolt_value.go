@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 
@@ -21,7 +22,7 @@ var _ nu.CustomValue = boltValue{}
 
 type boltValue struct {
 	db   *bbolt.DB
-	name [][]byte
+	name []boltItem
 	kind uint8
 }
 
@@ -41,7 +42,7 @@ func (r boltValue) FollowPathString(ctx context.Context, item string) (nu.Value,
 		if len(r.name) == 0 {
 			return nu.Value{Value: nil}, nil // root bucket
 		}
-		return nu.Value{Value: r.name[len(r.name)-1]}, nil
+		return nu.Value{Value: r.name[len(r.name)-1].name}, nil
 	case "type":
 		switch r.kind {
 		case kindBucket:
@@ -57,7 +58,7 @@ func (r boltValue) FollowPathString(ctx context.Context, item string) (nu.Value,
 			if err != nil {
 				return err
 			}
-			buf = slices.Clone(b.Get(r.name[len(r.name)-1]))
+			buf = slices.Clone(b.Get(r.name[len(r.name)-1].name))
 			return nil
 		})
 		return nu.Value{Value: buf}, err
@@ -69,7 +70,7 @@ func (r boltValue) FollowPathString(ctx context.Context, item string) (nu.Value,
 				return err
 			}
 			if r.kind == kindKey {
-				v.Value = nu.Filesize(len(b.Get(r.name[len(r.name)-1])))
+				v.Value = nu.Filesize(len(b.Get(r.name[len(r.name)-1].name)))
 			} else {
 				v.Value = b.Inspect().KeyN
 			}
@@ -118,6 +119,12 @@ func (r boltValue) Operation(ctx context.Context, op operator.Operator, rhs nu.V
 			return r.addBucket(v)
 		case nu.Record:
 			return r.addValue(v["key"], v["value"])
+		default:
+			return nu.Value{}, nu.Error{
+				Err:    errors.New("unsupported value type"),
+				Help:   "Supported types are String, Binary and Record{key: ..., value: ...}",
+				Labels: []nu.Label{{Text: fmt.Sprintf("unsupported type %T", rhs.Value), Span: rhs.Span}},
+			}
 		}
 	case operator.Math_Subtract:
 		switch v := rhs.Value.(type) {
@@ -125,6 +132,12 @@ func (r boltValue) Operation(ctx context.Context, op operator.Operator, rhs nu.V
 			return r.asValue(), r.deleteItem([]byte(v))
 		case []byte:
 			return r.asValue(), r.deleteItem(v)
+		default:
+			return nu.Value{}, nu.Error{
+				Err:    errors.New("unsupported value type"),
+				Help:   "Supported types are String and Binary",
+				Labels: []nu.Label{{Text: fmt.Sprintf("unsupported type %T", rhs.Value), Span: rhs.Span}},
+			}
 		}
 	}
 	return nu.Value{}, fmt.Errorf("operation %s %s %T not supported", r.Name(), op, rhs.Value)
@@ -136,7 +149,7 @@ func (r boltValue) PartialCmp(ctx context.Context, v nu.Value) nu.Ordering {
 			if i >= len(rhs) {
 				return nu.Greater // shorter (rhs) is less
 			}
-			if r := slices.Compare(v, rhs[i]); r != 0 {
+			if r := slices.Compare(v.name, rhs[i].name); r != 0 {
 				return nu.Ordering(r)
 			}
 		}
@@ -152,14 +165,14 @@ func (r boltValue) PartialCmp(ctx context.Context, v nu.Value) nu.Ordering {
 func (r boltValue) ToBaseValue(ctx context.Context) (nu.Value, error) {
 	return nu.Value{Value: nu.Record{
 		"db":   nu.Value{Value: r.db.Path()},
-		"item": nu.ToValue(r.name),
+		"item": nu.ToValue(r.name[len(r.name)].name),
 	}}, nil
 }
 
 func (r boltValue) asValue() nu.Value { return nu.Value{Value: r} }
 
 func (r boltValue) child(kind uint8, name []byte) nu.Value {
-	return boltValue{db: r.db, name: append(r.name, name), kind: kind}.asValue()
+	return boltValue{db: r.db, name: append(r.name, boltItem{name: name}), kind: kind}.asValue()
 }
 
 func (r boltValue) addValue(keyn, value nu.Value) (nu.Value, error) {
@@ -216,8 +229,8 @@ func (r boltValue) goToBucket(tx *bbolt.Tx) (*bbolt.Bucket, error) {
 	}
 	b := tx.Cursor().Bucket()
 	for _, v := range path {
-		if b = b.Bucket(v); b == nil {
-			return nil, fmt.Errorf("bucket %x not found", v)
+		if b = b.Bucket(v.name); b == nil {
+			return nil, (&nu.Error{Err: fmt.Errorf("bucket %x doesn't exist", v.name)}).AddLabel("no such bucket", v.span)
 		}
 	}
 	return b, nil

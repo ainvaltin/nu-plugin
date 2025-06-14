@@ -61,7 +61,7 @@ func boltCmdHandler(ctx context.Context, call *nu.ExecCommand) error {
 		return fmt.Errorf("opening bolt db: %w", err)
 	}
 
-	var path [][]byte
+	var path []boltItem
 	if len(call.Positional) > 1 {
 		if path, err = toPath(call.Positional[1]); err != nil {
 			return err
@@ -73,17 +73,17 @@ func boltCmdHandler(ctx context.Context, call *nu.ExecCommand) error {
 		err = db.View(func(tx *bbolt.Tx) error {
 			b := tx.Cursor().Bucket()
 			for _, v := range path[:len(path)-1] {
-				if b = b.Bucket(v); b == nil {
-					return fmt.Errorf("invalid path, bucket %x doesn't exist", v)
+				if b = b.Bucket(v.name); b == nil {
+					return (&nu.Error{Err: fmt.Errorf("invalid path, bucket %x doesn't exist", v.name)}).AddLabel("no such bucket", v.span)
 				}
 			}
 			name := path[len(path)-1]
-			if b.Get(name) != nil {
+			if b.Get(name.name) != nil {
 				kind = kindKey
-			} else if tx.Bucket(name) != nil {
+			} else if tx.Bucket(name.name) != nil {
 				kind = kindBucket
 			} else {
-				return fmt.Errorf("invalid path, key/bucket %x doesn't exist", name)
+				return (&nu.Error{Err: fmt.Errorf("invalid path, key/bucket %x doesn't exist", name.name)}).AddLabel("no such bucket", name.span)
 			}
 			return nil
 		})
