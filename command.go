@@ -170,11 +170,11 @@ type InOutTypes struct {
 }
 
 type PositionalArg struct {
-	Name    string                  `msgpack:"name"`
-	Desc    string                  `msgpack:"desc"`
-	Shape   syntaxshape.SyntaxShape `msgpack:"shape"`
-	VarId   uint                    `msgpack:"var_id,omitempty"`
-	Default *Value                  `msgpack:"default_value,omitempty"`
+	Name    string
+	Desc    string
+	Shape   syntaxshape.SyntaxShape
+	VarId   uint
+	Default *Value
 }
 
 /*
