@@ -4,6 +4,7 @@ go 1.24
 
 require (
 	github.com/ainvaltin/nu-plugin v0.0.0-20250611155746-65c155f341db
+	github.com/google/go-cmp v0.7.0
 	go.etcd.io/bbolt v1.4.0
 )
 

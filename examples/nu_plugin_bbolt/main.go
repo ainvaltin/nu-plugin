@@ -61,38 +61,23 @@ func boltCmdHandler(ctx context.Context, call *nu.ExecCommand) error {
 		return fmt.Errorf("opening bolt db: %w", err)
 	}
 
-	var path []boltItem
-	if len(call.Positional) > 1 {
-		if path, err = toPath(call.Positional[1]); err != nil {
-			return err
-		}
+	out, err := call.ReturnListStream(ctx)
+	if err != nil {
+		return fmt.Errorf("opening result stream: %w", err)
 	}
+	defer close(out)
 
-	kind := uint8(kindBucket)
-	if len(path) > 0 {
-		err = db.View(func(tx *bbolt.Tx) error {
-			b := tx.Cursor().Bucket()
-			for _, v := range path[:len(path)-1] {
-				if b = b.Bucket(v.name); b == nil {
-					return (&nu.Error{Err: fmt.Errorf("invalid path, bucket %x doesn't exist", v.name)}).AddLabel("no such bucket", v.span)
-				}
-			}
-			name := path[len(path)-1]
-			if b.Get(name.name) != nil {
-				kind = kindKey
-			} else if tx.Bucket(name.name) != nil {
-				kind = kindBucket
-			} else {
-				return (&nu.Error{Err: fmt.Errorf("invalid path, key/bucket %x doesn't exist", name.name)}).AddLabel("no such bucket", name.span)
-			}
-			return nil
-		})
+	var path nu.Value
+	if len(call.Positional) > 1 {
+		path = call.Positional[1]
+	}
+	for v, err := range getBoltValues(db, path) {
 		if err != nil {
 			return err
 		}
+		out <- nu.Value{Value: v}
 	}
-
-	return call.ReturnValue(ctx, nu.Value{Value: boltValue{db: db, name: path, kind: kind}})
+	return nil
 }
 
 var dbr map[string]*bbolt.DB

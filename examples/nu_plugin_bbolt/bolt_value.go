@@ -48,7 +48,7 @@ func (r boltValue) FollowPathString(ctx context.Context, item string) (nu.Value,
 		case kindBucket:
 			return nu.Value{Value: "bucket"}, nil
 		case kindKey:
-			return nu.Value{Value: "key"}, nil
+			return nu.Value{Value: "value"}, nil
 		}
 		return nu.Value{Value: "unknown"}, nil
 	case "value":
@@ -77,7 +77,7 @@ func (r boltValue) FollowPathString(ctx context.Context, item string) (nu.Value,
 			return nil
 		})
 		return v, err
-	case "keys":
+	case "values":
 		var items []nu.Value
 		err := r.db.View(func(tx *bbolt.Tx) error {
 			b, err := r.goToBucket(tx)
@@ -163,9 +163,13 @@ func (r boltValue) PartialCmp(ctx context.Context, v nu.Value) nu.Ordering {
 }
 
 func (r boltValue) ToBaseValue(ctx context.Context) (nu.Value, error) {
+	name := nu.Value{}
+	if len(r.name) > 0 {
+		name = nu.ToValue(r.name[len(r.name)-1].name)
+	}
 	return nu.Value{Value: nu.Record{
 		"db":   nu.Value{Value: r.db.Path()},
-		"item": nu.ToValue(r.name[len(r.name)].name),
+		"item": name,
 	}}, nil
 }
 
