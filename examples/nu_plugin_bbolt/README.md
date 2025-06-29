@@ -19,14 +19,14 @@ The examples to trigger CustomValue methods.
 
 The command
 ```nushell
-boltval ~/data/test.db | $in.buckets | sort
+boltval ~/data/test.db | $in.0.buckets | sort
 ```
 triggers `FollowPathString` (the `.buckets` access) and `PartialCmp` (the `sort` filter).
 The `ToBaseValue` is called to get the value to show to the user.
 It lists all buckets in the root bucket.
 
 ```nushell
-boltval ~/data/test.db | $in + bar + {key: foo, value: 0x[0102030405]}
+boltval ~/data/test.db | $in.0 + bar + {key: foo, value: 0x[0102030405]}
 ```
 This triggers `Operation` on the custom value with `Math_Add` operator and string "bar"
 and then on the resulting variable another add with record as right hand side value.
@@ -38,7 +38,7 @@ Some example commands to explain how to use this plugin for "normal work".
 
 To list all keys in all top level buckets
 ```nushell
-boltval ~/data/test.db | $in.buckets | each {|| $in.values} | flatten
+boltval ~/data/test.db | $in.0.buckets | each {|| $in.values} | flatten
 ```
 omitting the `path` argument means that the root bucket is selected so `$in.buckets` in the
 next step lists all the root buckets... alternatively

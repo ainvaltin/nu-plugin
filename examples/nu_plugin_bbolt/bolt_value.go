@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"slices"
 
 	"go.etcd.io/bbolt"
@@ -38,6 +39,14 @@ func (r boltValue) FollowPathInt(ctx context.Context, item uint) (nu.Value, erro
 
 func (r boltValue) FollowPathString(ctx context.Context, item string) (nu.Value, error) {
 	switch item {
+	case "db":
+		return nu.Value{Value: r.db.Path()}, nil
+	case "item":
+		name := make([][]byte, 0, len(r.name))
+		for _, v := range r.name {
+			name = append(name, v.name)
+		}
+		return nu.ToValue(name), nil
 	case "name":
 		if len(r.name) == 0 {
 			return nu.Value{Value: nil}, nil // root bucket
@@ -163,14 +172,11 @@ func (r boltValue) PartialCmp(ctx context.Context, v nu.Value) nu.Ordering {
 }
 
 func (r boltValue) ToBaseValue(ctx context.Context) (nu.Value, error) {
-	name := nu.Value{}
+	name := []byte{}
 	if len(r.name) > 0 {
-		name = nu.ToValue(r.name[len(r.name)-1].name)
+		name = r.name[len(r.name)-1].name
 	}
-	return nu.Value{Value: nu.Record{
-		"db":   nu.Value{Value: r.db.Path()},
-		"item": name,
-	}}, nil
+	return nu.Value{Value: fmt.Sprintf("%x@%s", name, filepath.Base(r.db.Path()))}, nil
 }
 
 func (r boltValue) asValue() nu.Value { return nu.Value{Value: r} }
