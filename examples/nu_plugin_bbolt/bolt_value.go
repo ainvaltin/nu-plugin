@@ -114,9 +114,9 @@ func (r boltValue) Operation(ctx context.Context, op operator.Operator, rhs nu.V
 	case operator.Math_Add:
 		switch v := rhs.Value.(type) {
 		case string:
-			return r.addBucket([]byte(v))
+			return r.addBucket([]byte(v), rhs.Span)
 		case []byte:
-			return r.addBucket(v)
+			return r.addBucket(v, rhs.Span)
 		case nu.Record:
 			return r.addValue(v["key"], v["value"])
 		default:
@@ -176,7 +176,7 @@ func (r boltValue) ToBaseValue(ctx context.Context) (nu.Value, error) {
 func (r boltValue) asValue() nu.Value { return nu.Value{Value: r} }
 
 func (r boltValue) child(kind uint8, name []byte) nu.Value {
-	return boltValue{db: r.db, name: append(r.name, boltItem{name: name}), kind: kind}.asValue()
+	return boltValue{db: r.db, name: append(slices.Clone(r.name), boltItem{name: name}), kind: kind}.asValue()
 }
 
 func (r boltValue) addValue(keyn, value nu.Value) (nu.Value, error) {
@@ -198,14 +198,19 @@ func (r boltValue) addValue(keyn, value nu.Value) (nu.Value, error) {
 	return r.child(kindKey, kn), err
 }
 
-func (r boltValue) addBucket(name []byte) (nu.Value, error) {
+func (r boltValue) addBucket(name []byte, span nu.Span) (nu.Value, error) {
 	err := r.db.Update(func(tx *bbolt.Tx) error {
 		b, err := r.goToBucket(tx)
 		if err != nil {
 			return err
 		}
-		_, err = b.CreateBucket(name)
-		return err
+		if _, err = b.CreateBucket(name); err != nil {
+			return nu.Error{
+				Err:    fmt.Errorf("create bucket %x: %w", name, err),
+				Labels: []nu.Label{{Text: err.Error(), Span: span}},
+			}
+		}
+		return nil
 	})
 	if err != nil {
 		return nu.Value{}, err

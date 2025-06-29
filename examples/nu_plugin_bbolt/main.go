@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -26,19 +27,19 @@ func main() {
 				Description: "Demo implementation of Custom Value type - each value is a item (bucket or key) in the bbolt database and properties and operators allow to act on them.",
 				SearchTerms: []string{"custom value"},
 				InputOutputTypes: []nu.InOutTypes{
-					{In: types.Nothing(), Out: types.Custom("bbolt")},
-					{In: types.Nothing(), Out: types.Any()},
+					{In: types.Nothing(), Out: types.List(types.Custom("bbolt"))},
+					{In: types.Any(), Out: types.List(types.Custom("bbolt"))},
 				},
-				RequiredPositional: []nu.PositionalArg{
+				OptionalPositional: []nu.PositionalArg{
 					{Name: "file", Shape: syntaxshape.Filepath(), Desc: `Name of the Bolt database file.`},
+					{Name: "path", Shape: syntaxshape.OneOf(syntaxshape.List(syntaxshape.Any()), syntaxshape.Binary(), syntaxshape.String(), syntaxshape.CellPath()), Desc: `Either bucket or key name, if not given then root bucket.`},
 				},
-				RestPositional:       &nu.PositionalArg{Name: "path", Shape: syntaxshape.OneOf(syntaxshape.List(syntaxshape.Any()), syntaxshape.Binary(), syntaxshape.String()), Desc: `Either bucket or key name, if not given then root bucket.`},
 				AllowMissingExamples: true,
 			},
 			Examples: []nu.Example{
-				{Description: "List of root buckets", Example: "boltval /path/to.db | $in.buckets", Result: &nu.Value{Value: nu.Record{"db": nu.Value{Value: "/path/to.db"}, "item": nu.Value{Value: []byte{1, 2, 3}}}}},
-				{Description: `Add bucket "bar", then add key "foo" into that bucket with value 0x[0102030405]`, Example: `boltval /path/to.db | $in + bar + {key: foo, value: 0x[0102030405]}`, Result: &nu.Value{Value: nu.Record{"db": nu.Value{Value: "/path/to.db"}, "item": nu.ToValue([][]byte{{98, 97, 114}, {102, 111, 111}})}}},
-				{Description: "Value of the key 'foo' in the bucket 'bar'.", Example: "boltval /path/to.db [bar, foo] | $in.value", Result: &nu.Value{Value: []byte{0, 1, 2, 3, 4, 5}}},
+				{Description: "List of root buckets", Example: "boltval /path/to.db | each {$in.buckets}", Result: &nu.Value{Value: []nu.Value{{Value: nu.Record{"db": nu.Value{Value: "/path/to.db"}, "item": nu.Value{Value: []byte{1, 2, 3}}}}}}},
+				{Description: `Add bucket "bar", then add key "foo" into that bucket with value 0x[0102030405]`, Example: `boltval /path/to.db | $in.0 + bar + {key: foo, value: 0x[0102030405]}`, Result: &nu.Value{Value: nu.Record{"db": nu.Value{Value: "/path/to.db"}, "item": nu.ToValue([][]byte{{98, 97, 114}, {102, 111, 111}})}}},
+				{Description: "Value of the key 'foo' in the bucket 'bar'.", Example: "boltval /path/to.db [bar, foo] | $in.0.value", Result: &nu.Value{Value: []byte{0, 1, 2, 3, 4, 5}}},
 			},
 			OnRun: boltCmdHandler,
 		}},
@@ -55,10 +56,19 @@ func main() {
 }
 
 func boltCmdHandler(ctx context.Context, call *nu.ExecCommand) error {
-	dbName := call.Positional[0].Value.(string)
-	db, err := getDB(dbName)
+	var values boltValues
+	var err error
+	if len(call.Positional) > 0 {
+		r := nu.Record{"db": call.Positional[0], "item": nu.Value{}}
+		if len(call.Positional) > 1 {
+			r["item"] = call.Positional[1]
+		}
+		values, err = getBoltValues(r)
+	} else {
+		values, err = getBoltValues(call.Input)
+	}
 	if err != nil {
-		return fmt.Errorf("opening bolt db: %w", err)
+		return err
 	}
 
 	out, err := call.ReturnListStream(ctx)
@@ -67,11 +77,7 @@ func boltCmdHandler(ctx context.Context, call *nu.ExecCommand) error {
 	}
 	defer close(out)
 
-	var path nu.Value
-	if len(call.Positional) > 1 {
-		path = call.Positional[1]
-	}
-	for v, err := range getBoltValues(db, path) {
+	for v, err := range values {
 		if err != nil {
 			return err
 		}
@@ -82,7 +88,10 @@ func boltCmdHandler(ctx context.Context, call *nu.ExecCommand) error {
 
 var dbr map[string]*bbolt.DB
 
-func getDB(dbName string) (*bbolt.DB, error) {
+func getDB(dbName string) (_ *bbolt.DB, err error) {
+	if dbName, err = filepath.Abs(dbName); err != nil {
+		return nil, err
+	}
 	if db, ok := dbr[dbName]; ok {
 		return db, nil
 	}

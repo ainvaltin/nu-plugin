@@ -15,14 +15,98 @@ import (
 
 type boltValues iter.Seq2[boltValue, error]
 
-func getBoltValues(db *bbolt.DB, path nu.Value) boltValues {
-	m, err := compilePath(path)
-	if err != nil {
-		return func(yield func(boltValue, error) bool) {
-			yield(boltValue{}, fmt.Errorf("compiling path: %w", err))
+func getBoltValues(in any) (boltValues, error) {
+	switch i := in.(type) {
+	case nu.Record:
+		return getBoltValuesRec(i, nu.Span{})
+	case nu.Value:
+		switch t := i.Value.(type) {
+		case nu.Record:
+			return getBoltValuesRec(t, i.Span)
+		case []nu.Value:
+			var iters []boltValues
+			for _, v := range t {
+				it, err := getBoltValues(v)
+				if err != nil {
+					return nil, err
+				}
+				iters = append(iters, it)
+			}
+			return func(yield func(boltValue, error) bool) {
+				for _, i := range iters {
+					for v, err := range i {
+						if !yield(v, err) {
+							return
+						}
+					}
+				}
+			}, nil
+		//case string: // db path; root bucket?
+		default:
+			return nil, nu.Error{
+				Err:    fmt.Errorf("input Value must be Record, got %T", i.Value),
+				Help:   `Input must be a Record {db:"path/to/bolt.db", item:itemName} where the "item" is optional`,
+				Labels: []nu.Label{{Text: "unsupported type", Span: i.Span}},
+			}
+		}
+	case nil:
+		return nil, nu.Error{
+			Err:  fmt.Errorf("missing input"),
+			Help: `Command must have either input or argument(s)`,
 		}
 	}
-	return matchItems(db, m)
+	return nil, nu.Error{Err: fmt.Errorf("unsupported input type %T", in)}
+}
+
+func getBoltValuesRec(in nu.Record, span nu.Span) (boltValues, error) {
+	dbn, ok := in["db"]
+	if !ok {
+		return nil, nu.Error{
+			Err:    errors.New("missing 'db' field"),
+			Help:   `Record describing Bolt item must have field "db" which is path to bolt database file.`,
+			Labels: []nu.Label{{Text: "missing 'db' field", Span: span}},
+		}
+	}
+
+	switch len(in) {
+	case 1: // db field only
+	case 2: // the other field must be "item"
+		if _, ok := in["item"]; !ok {
+			return nil, nu.Error{
+				Err:    errors.New("missing 'item' field"),
+				Help:   `Supported fields are "db" and "item"`,
+				Labels: unsupportedFields(in),
+			}
+		}
+	default:
+		return nil, nu.Error{
+			Err:    fmt.Errorf("expected one or two fields, got %d", len(in)),
+			Help:   `Record describing Bolt item may have only two fields, "db" and "item"`,
+			Labels: unsupportedFields(in),
+		}
+	}
+
+	db, err := getDB(dbn.Value.(string))
+	if err != nil {
+		return nil, nu.Error{
+			Err:    err,
+			Labels: []nu.Label{{Text: `invalid db name`, Span: dbn.Span}},
+		}
+	}
+	m, err := compilePath(in["item"])
+	if err != nil {
+		return nil, fmt.Errorf("compiling path: %w", err)
+	}
+	return matchItems(db, m), nil
+}
+
+func unsupportedFields(r nu.Record) (l []nu.Label) {
+	for k, v := range r {
+		if k != "db" && k != "item" {
+			l = append(l, nu.Label{Text: `unsupported field`, Span: v.Span})
+		}
+	}
+	return l
 }
 
 func matchItems(db *bbolt.DB, m pathMatcher) boltValues {
@@ -102,7 +186,13 @@ func toPathMatcher(v nu.Value) (pathMatcher, error) {
 		if isRegexp.Match([]byte(p)) {
 			re, err := regexp.Compile(p)
 			if err != nil {
-				return nil, err
+				return nil, nu.Error{
+					Err:    fmt.Errorf("compiling regular expression: %w", err),
+					Code:   "go::regexp::syntax",
+					Url:    "https://pkg.go.dev/regexp/syntax",
+					Help:   "See Go documentation about supported regular expression syntax",
+					Labels: []nu.Label{{Text: err.Error(), Span: v.Span}},
+				}
 			}
 			return regexpMatcher(re, v.Span), nil
 		}
