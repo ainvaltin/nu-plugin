@@ -63,21 +63,9 @@ func (glob Glob) encodeGlob(enc *msgpack.Encoder) error {
 
 // the enclosing map has been red and we need to decode the struct itself.
 func decodeGlob(dec *msgpack.Decoder, value *Value) error {
-	n, err := dec.DecodeMapLen()
-	if err != nil {
-		return err
-	}
-	if n == -1 {
-		return nil
-	}
-
 	g := Glob{}
-	for idx := 0; idx < n; idx++ {
-		fieldName, err := dec.DecodeString()
-		if err != nil {
-			return fmt.Errorf("decoding field name [%d/%d] of Glob: %w", idx+1, n, err)
-		}
-		switch fieldName {
+	err := decodeMap("Glob", dec, func(dec *msgpack.Decoder, key string) (err error) {
+		switch key {
 		case "val":
 			g.Value, err = dec.DecodeString()
 		case "no_expand":
@@ -85,14 +73,12 @@ func decodeGlob(dec *msgpack.Decoder, value *Value) error {
 		case "span":
 			err = value.Span.decodeMsgpack(dec)
 		default:
-			return fmt.Errorf("unsupported Glob Value field %q", fieldName)
+			err = errUnknownField
 		}
-		if err != nil {
-			return fmt.Errorf("decoding field %s of Glob: %w", fieldName, err)
-		}
-	}
+		return err
+	})
 	value.Value = g
-	return nil
+	return err
 }
 
 /*
@@ -175,27 +161,14 @@ func (c Closure) encodeMsgpack(enc *msgpack.Encoder) error {
 }
 
 func decodeClosure(dec *msgpack.Decoder) (c Closure, _ error) {
-	cnt, err := dec.DecodeMapLen()
-	if err != nil {
-		return c, err
-	}
-	if cnt != 2 {
-		return c, fmt.Errorf("expected Closure to contain 2 keys, got %d", cnt)
-	}
-
-	var code byte
-	for range cnt {
-		key, err := dec.DecodeString()
-		if err != nil {
-			return c, err
-		}
+	return c, decodeMap("Closure", dec, func(dec *msgpack.Decoder, key string) (err error) {
 		switch key {
 		case "block_id":
 			c.BlockID, err = dec.DecodeUint()
 		case "captures":
-			code, err = dec.PeekCode()
-			if err != nil {
-				return c, fmt.Errorf("peeking 'captures' value type: %w", err)
+			var code byte
+			if code, err = dec.PeekCode(); err != nil {
+				return fmt.Errorf("peeking value type: %w", err)
 			}
 			switch code {
 			case msgpcode.Nil:
@@ -203,10 +176,9 @@ func decodeClosure(dec *msgpack.Decoder) (c Closure, _ error) {
 			default:
 				err = c.Captures.DecodeMsgpack(dec)
 			}
+		default:
+			return errUnknownField
 		}
-		if err != nil {
-			return c, fmt.Errorf("decoding key %q: %w", key, err)
-		}
-	}
-	return c, nil
+		return err
+	})
 }

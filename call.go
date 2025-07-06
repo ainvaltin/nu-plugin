@@ -135,57 +135,34 @@ func decodeCall(dec *msgpack.Decoder, p *Plugin) (any, error) {
 }
 
 func (r *run) decodeMsgpack(dec *msgpack.Decoder, p *Plugin) error {
-	cnt, err := dec.DecodeMapLen()
-	if err != nil {
-		return fmt.Errorf("reading Run map length: %w", err)
-	}
-	for idx := 0; idx < cnt; idx++ {
-		key, err := dec.DecodeString()
-		if err != nil {
-			return fmt.Errorf("reading Run key: %w", err)
-		}
+	return decodeMap("Run", dec, func(dec *msgpack.Decoder, key string) (err error) {
 		switch key {
 		case "name":
 			r.Name, err = dec.DecodeString()
-		case "call":
-			err = r.Call.decodeMsgpack(dec, p)
 		case "input":
 			r.Input, err = decodePipelineDataHeader(dec, p)
+		case "call":
+			return r.Call.decodeMsgpack(dec, p)
 		default:
-			return fmt.Errorf("unknown key %q under Run", key)
+			return errUnknownField
 		}
-		if err != nil {
-			return fmt.Errorf("decoding Run key %q: %w", key, err)
-		}
-	}
-	return nil
+		return err
+	})
 }
 
 func (ec *evaluatedCall) decodeMsgpack(dec *msgpack.Decoder, p *Plugin) error {
-	cnt, err := dec.DecodeMapLen()
-	if err != nil {
-		return fmt.Errorf("reading evaluatedCall map length: %w", err)
-	}
-	for idx := 0; idx < cnt; idx++ {
-		key, err := dec.DecodeString()
-		if err != nil {
-			return fmt.Errorf("reading evaluatedCall key: %w", err)
-		}
+	return decodeMap("evaluatedCall", dec, func(dec *msgpack.Decoder, key string) error {
 		switch key {
 		case "head":
-			err = ec.Head.decodeMsgpack(dec)
+			return ec.Head.decodeMsgpack(dec)
 		case "positional":
-			err = ec.Positional.decodeMsgpack(dec, p)
+			return ec.Positional.decodeMsgpack(dec, p)
 		case "named":
-			err = ec.Named.decodeMsgpack(dec, p)
+			return ec.Named.decodeMsgpack(dec, p)
 		default:
-			return fmt.Errorf("unknown key %q under evaluatedCall", key)
+			return errUnknownField
 		}
-		if err != nil {
-			return fmt.Errorf("decoding evaluatedCall key %q: %w", key, err)
-		}
-	}
-	return nil
+	})
 }
 
 func decodePipelineDataHeader(dec *msgpack.Decoder, p *Plugin) (any, error) {

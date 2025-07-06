@@ -3,7 +3,6 @@ package nu
 import (
 	"context"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"reflect"
 
@@ -113,37 +112,25 @@ func encodeCustomValue(enc *msgpack.Encoder, id uint32, value CustomValue) error
 	return nil
 }
 
-func decodeCustomValue(dec *msgpack.Decoder, p *Plugin) (cv CustomValue, err error) {
-	cnt, err := dec.DecodeMapLen()
-	if err != nil {
-		return nil, err
-	}
-	for i := range cnt {
-		fieldName, err := dec.DecodeString()
-		if err != nil {
-			return nil, fmt.Errorf("decoding field name [%d/%d] of Custom: %w", i+1, cnt, err)
-		}
-		switch fieldName {
+func decodeCustomValue(dec *msgpack.Decoder, p *Plugin) (cv CustomValue, _ error) {
+	return cv, decodeMap("CustomValue", dec, func(dec *msgpack.Decoder, key string) (err error) {
+		switch key {
 		case "type", "name":
 			_, err = dec.DecodeString()
 		case "data":
 			id, ok := uint32(0), false
 			if id, err = readCVID(dec); err == nil {
 				if cv, ok = p.cvals[id]; !ok {
-					err = fmt.Errorf("no CustomValue with id %d", id)
+					return fmt.Errorf("no CustomValue with id %d", id)
 				}
 			}
 		case "notify_on_drop":
 			_, err = dec.DecodeBool()
 		default:
-			err = errors.New("unsupported key")
+			err = errUnknownField
 		}
-
-		if err != nil {
-			return nil, fmt.Errorf("decoding CustomValue key %q: %w", fieldName, err)
-		}
-	}
-	return cv, nil
+		return err
+	})
 }
 
 type (

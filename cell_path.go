@@ -1,7 +1,6 @@
 package nu
 
 import (
-	"errors"
 	"fmt"
 	"math"
 
@@ -245,7 +244,7 @@ func decodePathMember(dec *msgpack.Decoder, p *Plugin) (PathMember, error) {
 				}
 			}
 		default:
-			err = errors.New("unsupported key")
+			err = errUnknownField
 		}
 		if err != nil {
 			return nil, fmt.Errorf("decoding key %q: %w", key, err)

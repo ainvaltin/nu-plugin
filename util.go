@@ -1,6 +1,7 @@
 package nu
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"reflect"
@@ -107,6 +108,28 @@ func decodeWrapperMap(dec *msgpack.Decoder) (string, error) {
 		return "", fmt.Errorf("reading map key: %w", err)
 	}
 	return keyName, nil
+}
+
+var errUnknownField = errors.New("unknown field")
+
+func decodeMap(name string, dec *msgpack.Decoder, decodeKey func(dec *msgpack.Decoder, key string) error) error {
+	cnt, err := dec.DecodeMapLen()
+	if err != nil {
+		return fmt.Errorf("reading %s map length: %w", name, err)
+	}
+	if cnt == -1 {
+		return nil
+	}
+	for i := range cnt {
+		key, err := dec.DecodeString()
+		if err != nil {
+			return fmt.Errorf("reading %s map key %d of %d: %w", name, i, cnt, err)
+		}
+		if err = decodeKey(dec, key); err != nil {
+			return fmt.Errorf("decoding %s map key %q: %w", name, key, err)
+		}
+	}
+	return nil
 }
 
 func encodeString(enc *msgpack.Encoder, key, value string) (err error) {

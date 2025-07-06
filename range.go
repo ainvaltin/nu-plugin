@@ -233,35 +233,19 @@ func (v *IntRange) decodeEndBound(dec *msgpack.Decoder) (err error) {
 }
 
 func (v *IntRange) decodeMsgpack(dec *msgpack.Decoder) error {
-	n, err := dec.DecodeMapLen()
-	if err != nil {
-		return err
-	}
-	if n == -1 {
-		return nil
-	}
-
-	for idx := 0; idx < n; idx++ {
-		fieldName, err := dec.DecodeString()
-		if err != nil {
-			return fmt.Errorf("decoding field name [%d/%d] of IntRange: %w", idx+1, n, err)
-		}
-		switch fieldName {
+	return decodeMap("IntRange", dec, func(dec *msgpack.Decoder, key string) (err error) {
+		switch key {
 		case "start":
 			v.Start, err = dec.DecodeInt64()
 		case "step":
 			v.Step, err = dec.DecodeInt64()
 		case "end":
-			err = v.decodeEndBound(dec)
+			return v.decodeEndBound(dec)
 		default:
-			return fmt.Errorf("unexpected key %q in IntRange", fieldName)
+			return errUnknownField
 		}
-		if err != nil {
-			return fmt.Errorf("decode field %q: %w", fieldName, err)
-		}
-	}
-	// validate? or we trust engine to send correct data?
-	return nil
+		return err
+	})
 }
 
 func decodeMsgpackRange(dec *msgpack.Decoder) (any, error) {

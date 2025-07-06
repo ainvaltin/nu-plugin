@@ -133,15 +133,7 @@ func (e *Error) encodeMsgpack(enc *msgpack.Encoder) error {
 }
 
 func decodeLabeledError(dec *msgpack.Decoder) (le Error, _ error) {
-	cnt, err := dec.DecodeMapLen()
-	if err != nil {
-		return le, err
-	}
-	for idx := range cnt {
-		key, err := dec.DecodeString()
-		if err != nil {
-			return le, fmt.Errorf("decode key %d/%d", idx, cnt)
-		}
+	return le, decodeMap("LabeledError", dec, func(dec *msgpack.Decoder, key string) (err error) {
 		switch key {
 		case "msg":
 			var msg string
@@ -156,33 +148,32 @@ func decodeLabeledError(dec *msgpack.Decoder) (le Error, _ error) {
 		case "labels":
 			var l int
 			if l, err = dec.DecodeArrayLen(); err != nil {
-				return le, fmt.Errorf("decode labels count: %w", err)
+				return fmt.Errorf("decode label count: %w", err)
 			}
 			le.Labels = make([]Label, l)
 			for i := range l {
 				if err = le.Labels[i].decodeMsgpack(dec); err != nil {
-					return le, fmt.Errorf("decode label %d of %d: %w", i, l, err)
+					return fmt.Errorf("decode label %d of %d: %w", i, l, err)
 				}
 			}
 		case "inner":
 			var l int
 			if l, err = dec.DecodeArrayLen(); err != nil {
-				return le, fmt.Errorf("decode labels count: %w", err)
+				return fmt.Errorf("decode inner error count: %w", err)
 			}
 			le.Inner = make([]Error, 0, l)
 			for i := range l {
 				e, err := decodeLabeledError(dec)
 				if err != nil {
-					return le, fmt.Errorf("decode inner error %d of %d: %w", i, l, err)
+					return fmt.Errorf("decode inner error %d of %d: %w", i, l, err)
 				}
 				le.Inner = append(le.Inner, e)
 			}
+		default:
+			return errUnknownField
 		}
-		if err != nil {
-			return le, fmt.Errorf("decoding value of %q: %w", key, err)
-		}
-	}
-	return le, nil
+		return err
+	})
 }
 
 /*
