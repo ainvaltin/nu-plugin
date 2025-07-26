@@ -96,7 +96,7 @@ func (cp *CellPath) decodeMsgpack(dec *msgpack.Decoder, p *Plugin) error {
 		return err
 	}
 	for idx := range cnt {
-		m, err := decodePathMember(dec, p)
+		m, err := decodePathMember(dec)
 		if err != nil {
 			return fmt.Errorf("decode CellPath member [%d/%d]: %w", idx, cnt, err)
 		}
@@ -201,7 +201,7 @@ func (pi pathItem[T]) encodeMsgpack(enc *msgpack.Encoder, p *Plugin) error {
 	return encodeBoolean(enc, "optional", pi.optional)
 }
 
-func decodePathMember(dec *msgpack.Decoder, p *Plugin) (PathMember, error) {
+func decodePathMember(dec *msgpack.Decoder) (PathMember, error) {
 	itemType, err := decodeWrapperMap(dec)
 	if err != nil {
 		return nil, fmt.Errorf("decode PathMember type key: %w", err)

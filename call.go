@@ -114,14 +114,14 @@ func decodeCall(dec *msgpack.Decoder, p *Plugin) (any, error) {
 		switch name {
 		case "Run":
 			r := run{Call: evaluatedCall{Named: NamedParams{}}}
-			if err := r.decodeMsgpack(dec, p); err != nil {
-				return nil, fmt.Errorf("decoding Run: %w", err)
+			if err = r.decodeMsgpack(dec, p); err != nil {
+				return nil, fmt.Errorf("decoding Call %s: %w", name, err)
 			}
 			m.Call = r
 		case "CustomValueOp":
 			r := customValueOp{}
-			if err := r.decodeMsgpack(dec, p); err != nil {
-				return nil, fmt.Errorf("decoding CustomValueOp: %w", err)
+			if err = r.decodeMsgpack(dec, p); err != nil {
+				return nil, fmt.Errorf("decoding Call %s: %w", name, err)
 			}
 			m.Call = r
 		default:
@@ -303,7 +303,7 @@ func (np *NamedParams) decodeMsgpack(dec *msgpack.Decoder, p *Plugin) error {
 		return nil
 	}
 
-	for idx := 0; idx < count; idx++ {
+	for idx := range count {
 		tl, err := dec.DecodeArrayLen()
 		if err != nil {
 			return fmt.Errorf("reading named params [%d] tuple length: %w", idx, err)
@@ -465,7 +465,7 @@ func (md *pipelineMetadata) EncodeMsgpack(enc *msgpack.Encoder) error {
 		return enc.EncodeNil()
 	} else {
 		if err := enc.EncodeString(md.ContentType); err != nil {
-			return err
+			return fmt.Errorf("encode ContentType value: %w", err)
 		}
 	}
 
