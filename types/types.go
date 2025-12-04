@@ -29,10 +29,10 @@ The key is field name and value is the type of the field.
 type RecordDef map[string]Type
 
 type nuType struct {
-	typ     string
-	itmType Type
-	fields  RecordDef
-	name    string
+	typ      string
+	itmTypes []Type
+	fields   RecordDef
+	name     string
 }
 
 func (ss *nuType) EncodeMsgpack(enc *msgpack.Encoder) error {
@@ -71,7 +71,19 @@ func (ss *nuType) encodeMsgpack(enc *msgpack.Encoder) error {
 		if err := encodeMapStart(enc, ss.typ); err != nil {
 			return err
 		}
-		return ss.itmType.encodeMsgpack(enc)
+		return ss.itmTypes[0].encodeMsgpack(enc)
+	case "OneOf": // OneOf(Box<[Type]>)
+		if err := encodeMapStart(enc, ss.typ); err != nil {
+			return err
+		}
+		if err := enc.EncodeArrayLen(len(ss.itmTypes)); err != nil {
+			return err
+		}
+		for _, t := range ss.itmTypes {
+			if err := t.encodeMsgpack(enc); err != nil {
+				return err
+			}
+		}
 	case "Record", "Table": // Record(Box<[(String, Type)]>), Table(Box<[(String, Type)]>),
 		if err := encodeMapStart(enc, ss.typ); err != nil {
 			return err
@@ -147,7 +159,7 @@ func Int() Type {
 }
 
 func List(itemType Type) Type {
-	return &nuType{typ: "List", itmType: itemType}
+	return &nuType{typ: "List", itmTypes: []Type{itemType}}
 }
 
 func ListStream() Type {
@@ -160,6 +172,10 @@ func Nothing() Type {
 
 func Number() Type {
 	return &nuType{typ: "Number"}
+}
+
+func OneOf(itemTypes ...Type) Type {
+	return &nuType{typ: "OneOf", itmTypes: itemTypes}
 }
 
 func Range() Type {
