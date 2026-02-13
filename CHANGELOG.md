@@ -1,3 +1,7 @@
+## [2026-02-13]
+- Plugin protocol version 0.108.0
+- Support for saving custom values to disk
+- Optional and casing information for FollowPath* functions
 
 ## [2025-06-11]
 - Plugin protocol version 0.105.0
