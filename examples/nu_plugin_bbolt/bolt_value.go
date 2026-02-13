@@ -37,11 +37,12 @@ func (r boltValue) Save(ctx context.Context, path string) error {
 	return fmt.Errorf("The save command is not implemented for custom value %s", r.Name())
 }
 
-func (r boltValue) FollowPathInt(ctx context.Context, item uint) (nu.Value, error) {
+func (r boltValue) FollowPathInt(ctx context.Context, item uint, optional bool) (nu.Value, error) {
 	return nu.Value{}, fmt.Errorf("int path not supported")
 }
 
-func (r boltValue) FollowPathString(ctx context.Context, item string) (nu.Value, error) {
+func (r boltValue) FollowPathString(ctx context.Context, item string, optional, caseSensitive bool) (nu.Value, error) {
+	// The optional and caseSensitive parameters are ignored in this implementation.
 	switch item {
 	case "db":
 		return nu.Value{Value: r.db.Path()}, nil

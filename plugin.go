@@ -231,9 +231,9 @@ func (p *Plugin) handleCustomValueOp(ctx context.Context, callID int, cvOp custo
 	case toBaseValue:
 		return handleResult(cv.ToBaseValue(ctx))
 	case followPathInt:
-		return handleResult(cv.FollowPathInt(ctx, op.Item))
+		return handleResult(cv.FollowPathInt(ctx, op.Item, op.Optional))
 	case followPathString:
-		return handleResult(cv.FollowPathString(ctx, op.Item))
+		return handleResult(cv.FollowPathString(ctx, op.Item, op.Optional, op.isCaseSensitive()))
 	case operation:
 		return handleResult(cv.Operation(ctx, op.op, op.value))
 	case partialCmp:
