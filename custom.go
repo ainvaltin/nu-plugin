@@ -76,6 +76,8 @@ type CustomValue interface {
 	// Compares the custom value to another value and returns the Ordering that should be used, if any.
 	// The argument may be any value - not just the same custom value type.
 	PartialCmp(ctx context.Context, v Value) Ordering
+	// Saves the custom value to a file at the given path.
+	Save(ctx context.Context, path string) error
 	// Returns a plain value that is representative of the custom value, or an error if this is not possible.
 	// Sending a custom value back for this operation is not allowed.
 	ToBaseValue(ctx context.Context) (Value, error)
@@ -154,6 +156,13 @@ type (
 		op    operator.Operator
 		value Value
 	}
+
+	save struct {
+		Path struct {
+			Item string `msgpack:"item"`
+			Span Span   `msgpack:"span"`
+		} `msgpack:"path"`
+	}
 )
 
 type customValueOp struct {
@@ -221,6 +230,10 @@ func (cvo *customValueOp) readOperation(dec *msgpack.Decoder, p *Plugin) error {
 		case "Operation":
 			v := operation{}
 			err = v.decodeMsgpack(dec, p)
+			cvo.op = v
+		case "Save":
+			v := save{}
+			err = dec.DecodeValue(reflect.ValueOf(&v))
 			cvo.op = v
 		default:
 			return fmt.Errorf("unknown CustomValueOp[1] type %q", name)

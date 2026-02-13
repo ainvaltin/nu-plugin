@@ -50,6 +50,8 @@ type (
 type (
 	empty struct{}
 
+	okResponse struct{}
+
 	// Value tuple variant as used by PipelineDataHeader
 	pipelineValue struct {
 		V Value
@@ -355,6 +357,12 @@ func (cr *callResponse) encodeMsgpack(enc *msgpack.Encoder, p *Plugin) error {
 		return dt.encodeMsgpack(enc, p)
 	case *pipelineData:
 		return dt.encodeMsgpack(enc, p)
+	case okResponse:
+		if err := encodeMapStart(enc, "Ok"); err != nil {
+			return err
+		}
+		var ret any = nil
+		return enc.EncodeValue(reflect.ValueOf(&ret))
 	case error:
 		return encodeErrorResponse(enc, flattenError(dt))
 	case metadata:
