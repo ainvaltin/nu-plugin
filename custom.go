@@ -143,14 +143,18 @@ type (
 	toBaseValue struct{}
 
 	followPathInt struct {
-		Item     uint `msgpack:"item"`
-		Span     Span `msgpack:"span"`
+		Path struct {
+			Item uint `msgpack:"item"`
+			Span Span `msgpack:"span"`
+		} `msgpack:"index"`
 		Optional bool `msgpack:"optional"`
 	}
 
 	followPathString struct {
-		Item     string `msgpack:"item"`
-		Span     Span   `msgpack:"span"`
+		Path struct {
+			Item string `msgpack:"item"`
+			Span Span   `msgpack:"span"`
+		} `msgpack:"column_name"`
 		Optional bool   `msgpack:"optional"`
 		Casing   string `msgpack:"casing"`
 	}
