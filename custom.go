@@ -63,12 +63,14 @@ type CustomValue interface {
 	Dropped(ctx context.Context) error
 	// Returns the result of following a numeric cell path (e.g. $custom_value.0) on the custom value.
 	// This is most commonly used with custom types that act like lists or tables.
-	// The result may be another custom value.
-	FollowPathInt(ctx context.Context, item uint) (Value, error)
+	// The result may be another custom value. The parameter `optional` is used to control whether the
+	// path is optional.
+	FollowPathInt(ctx context.Context, item uint, optional bool) (Value, error)
 	// Returns the result of following a string cell path (e.g. $custom_value.field) on the custom value.
 	// This is most commonly used with custom types that act like lists or tables.
-	// The result may be another custom value.
-	FollowPathString(ctx context.Context, item string) (Value, error)
+	// The result may be another custom value. The parameters `optional` and `caseSensitive` are used to
+	// control whether the path is optional and whether the path is case sensitive.
+	FollowPathString(ctx context.Context, item string, optional, caseSensitive bool) (Value, error)
 	// Returns the result of evaluating an Operator on this custom value with another value.
 	// The rhs Value may be any value - not just the same custom value type.
 	// The result may be another custom value.
@@ -76,6 +78,8 @@ type CustomValue interface {
 	// Compares the custom value to another value and returns the Ordering that should be used, if any.
 	// The argument may be any value - not just the same custom value type.
 	PartialCmp(ctx context.Context, v Value) Ordering
+	// Saves the custom value to a file at the given path.
+	Save(ctx context.Context, path string) error
 	// Returns a plain value that is representative of the custom value, or an error if this is not possible.
 	// Sending a custom value back for this operation is not allowed.
 	ToBaseValue(ctx context.Context) (Value, error)
@@ -139,13 +143,16 @@ type (
 	toBaseValue struct{}
 
 	followPathInt struct {
-		Item uint `msgpack:"item"`
-		Span Span `msgpack:"span"`
+		Item     uint `msgpack:"item"`
+		Span     Span `msgpack:"span"`
+		Optional bool `msgpack:"optional"`
 	}
 
 	followPathString struct {
-		Item string `msgpack:"item"`
-		Span Span   `msgpack:"span"`
+		Item     string `msgpack:"item"`
+		Span     Span   `msgpack:"span"`
+		Optional bool   `msgpack:"optional"`
+		Casing   string `msgpack:"casing"`
 	}
 
 	partialCmp struct{ value Value }
@@ -154,7 +161,18 @@ type (
 		op    operator.Operator
 		value Value
 	}
+
+	save struct {
+		Path struct {
+			Item string `msgpack:"item"`
+			Span Span   `msgpack:"span"`
+		} `msgpack:"path"`
+	}
 )
+
+func (p followPathString) isCaseSensitive() bool {
+	return p.Casing == "Sensitive"
+}
 
 type customValueOp struct {
 	name string
@@ -221,6 +239,10 @@ func (cvo *customValueOp) readOperation(dec *msgpack.Decoder, p *Plugin) error {
 		case "Operation":
 			v := operation{}
 			err = v.decodeMsgpack(dec, p)
+			cvo.op = v
+		case "Save":
+			v := save{}
+			err = dec.DecodeValue(reflect.ValueOf(&v))
 			cvo.op = v
 		default:
 			return fmt.Errorf("unknown CustomValueOp[1] type %q", name)

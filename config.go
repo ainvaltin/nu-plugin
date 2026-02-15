@@ -16,7 +16,7 @@ Config is Plugin's configuration, mostly meant to allow debugging.
 type Config struct {
 	// whether to use "local socket mode" when supported. Defaults to
 	// true when nil config is used to create plugin.
-	//LocalSocket bool
+	// LocalSocket bool
 
 	// Logger the Plugin should use. If not provided the plugin will create
 	// Error level logger which logs to stderr.
@@ -85,5 +85,5 @@ const (
 	format_mpack = "\x07msgpack"
 
 	protocol_name    = "nu-plugin"
-	protocol_version = "0.107.0"
+	protocol_version = "0.110.0"
 )

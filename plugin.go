@@ -213,6 +213,7 @@ func (p *Plugin) handleCall(ctx context.Context, msg call) error {
 }
 
 func (p *Plugin) handleCustomValueOp(ctx context.Context, callID int, cvOp customValueOp) error {
+	p.log.DebugContext(ctx, "handling custom value operation", "id", cvOp.id, "name", cvOp.name, "op", cvOp.op)
 	cv, ok := p.cvals[cvOp.id]
 	if !ok {
 		return fmt.Errorf("custom value operation on unknown variable {%s, %d} %T", cvOp.name, cvOp.id, cvOp.op)
@@ -230,9 +231,9 @@ func (p *Plugin) handleCustomValueOp(ctx context.Context, callID int, cvOp custo
 	case toBaseValue:
 		return handleResult(cv.ToBaseValue(ctx))
 	case followPathInt:
-		return handleResult(cv.FollowPathInt(ctx, op.Item))
+		return handleResult(cv.FollowPathInt(ctx, op.Item, op.Optional))
 	case followPathString:
-		return handleResult(cv.FollowPathString(ctx, op.Item))
+		return handleResult(cv.FollowPathString(ctx, op.Item, op.Optional, op.isCaseSensitive()))
 	case operation:
 		return handleResult(cv.Operation(ctx, op.op, op.value))
 	case partialCmp:
@@ -242,6 +243,11 @@ func (p *Plugin) handleCustomValueOp(ctx context.Context, callID int, cvOp custo
 			return p.outputMsg(ctx, &callResponse{ID: callID, Response: err})
 		}
 		return p.outputMsg(ctx, &callResponse{ID: callID, Response: &pipelineData{Data: empty{}}})
+	case save:
+		if err := cv.Save(ctx, op.Path.Item); err != nil {
+			return p.outputMsg(ctx, &callResponse{ID: callID, Response: err})
+		}
+		return p.outputMsg(ctx, &callResponse{ID: callID, Response: okResponse{}})
 	default:
 		return fmt.Errorf("unknown custom value operation %T on %s", cvOp.op, cvOp.name)
 	}
