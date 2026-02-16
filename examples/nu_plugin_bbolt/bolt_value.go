@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"slices"
 
@@ -34,7 +35,19 @@ func (r boltValue) NotifyOnDrop() bool { return false }
 func (r boltValue) Dropped(ctx context.Context) error { return nil }
 
 func (r boltValue) Save(ctx context.Context, path string) error {
-	return fmt.Errorf("The save command is not implemented for custom value %s", r.Name())
+	buf, err := r.value()
+	if err != nil {
+		return err
+	}
+
+	f, err := os.Create(path)
+	if err != nil {
+		return fmt.Errorf("failed to open destination file: %w", err)
+	}
+	if _, err = f.Write(buf); err != nil {
+		return fmt.Errorf("writing value to file: %w", err)
+	}
+	return nil
 }
 
 func (r boltValue) FollowPathInt(ctx context.Context, item uint, optional bool) (nu.Value, error) {
@@ -66,15 +79,7 @@ func (r boltValue) FollowPathString(ctx context.Context, item string, optional, 
 		}
 		return nu.Value{Value: "unknown"}, nil
 	case "value":
-		var buf []byte
-		err := r.db.View(func(tx *bbolt.Tx) error {
-			b, err := r.goToBucket(tx)
-			if err != nil {
-				return err
-			}
-			buf = slices.Clone(b.Get(r.name[len(r.name)-1].name))
-			return nil
-		})
+		buf, err := r.value()
 		return nu.Value{Value: buf}, err
 	case "size":
 		v := nu.Value{}
@@ -185,6 +190,25 @@ func (r boltValue) ToBaseValue(ctx context.Context) (nu.Value, error) {
 }
 
 func (r boltValue) asValue() nu.Value { return nu.Value{Value: r} }
+
+func (r boltValue) value() ([]byte, error) {
+	switch r.kind {
+	case kindBucket:
+		return nil, errors.New("bucket doesn't have value")
+	case kindKey:
+		var buf []byte
+		err := r.db.View(func(tx *bbolt.Tx) error {
+			b, err := r.goToBucket(tx)
+			if err != nil {
+				return err
+			}
+			buf = slices.Clone(b.Get(r.name[len(r.name)-1].name))
+			return nil
+		})
+		return buf, err
+	}
+	return nil, errors.New("item kind is unknown")
+}
 
 func (r boltValue) child(kind uint8, name []byte) nu.Value {
 	return boltValue{db: r.db, name: append(slices.Clone(r.name), boltItem{name: name}), kind: kind}.asValue()
