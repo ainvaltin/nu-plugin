@@ -541,6 +541,11 @@ func (md *pipelineMetadata) DecodeMsgpack(dec *msgpack.Decoder) error {
 				default:
 					return fmt.Errorf("unexpected value code %x for %q", c, key)
 				}
+			case "custom":
+				err := dec.Skip()
+				if err != nil {
+					return fmt.Errorf("skipping custom data: %w", err)
+				}
 			default:
 				return fmt.Errorf("unexpected metadata key %q", key)
 			}
