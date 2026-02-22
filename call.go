@@ -2,6 +2,7 @@ package nu
 
 import (
 	"fmt"
+	"maps"
 	"reflect"
 
 	"github.com/vmihailenco/msgpack/v5"
@@ -59,16 +60,16 @@ type (
 	}
 
 	listStream struct {
-		ID   int              `msgpack:"id"`
-		Span Span             `msgpack:"span"`
-		MD   pipelineMetadata `msgpack:"metadata"`
+		ID   int
+		Span Span
+		MD   pipelineMetadata
 	}
 
 	byteStream struct {
-		ID   int              `msgpack:"id"`
-		Span Span             `msgpack:"span"`
-		Type string           `msgpack:"type"`
-		MD   pipelineMetadata `msgpack:"metadata"`
+		ID   int
+		Span Span
+		Type string
+		MD   pipelineMetadata
 	}
 
 	// A successful result with a Nu Value or stream. The body is a PipelineDataHeader.
@@ -80,6 +81,7 @@ type (
 		DataSource  string
 		FilePath    string // assigned when DataSource == FilePath
 		ContentType string
+		Custom      Record
 	}
 )
 
@@ -193,16 +195,16 @@ func decodePipelineDataHeader(dec *msgpack.Decoder, p *Plugin) (any, error) {
 			if err := v.decodeMsgpack(dec, p); err != nil {
 				return nil, fmt.Errorf("decoding pipelineValue: %w", err)
 			}
-			return v.V, nil
+			return v, nil
 		case "ListStream":
 			v := listStream{}
-			if err := dec.DecodeValue(reflect.ValueOf(&v)); err != nil {
+			if err := v.decodeMsgpack(dec, p); err != nil {
 				return nil, fmt.Errorf("decoding ListStream: %w", err)
 			}
 			return v, nil
 		case "ByteStream":
 			v := byteStream{}
-			if err := dec.DecodeValue(reflect.ValueOf(&v)); err != nil {
+			if err := v.decodeMsgpack(dec, p); err != nil {
 				return nil, fmt.Errorf("decoding ByteStream: %w", err)
 			}
 			return v, nil
@@ -216,18 +218,18 @@ func decodePipelineDataHeader(dec *msgpack.Decoder, p *Plugin) (any, error) {
 
 func encodePipelineDataHeader(enc *msgpack.Encoder, data any, p *Plugin) error {
 	switch dt := data.(type) {
-	case Value:
-		return (&pipelineValue{V: dt}).encodeMsgpack(enc, p)
+	case pipelineValue:
+		return dt.encodeMsgpack(enc, p)
 	case *listStream:
 		if err := encodeMapStart(enc, "ListStream"); err != nil {
 			return err
 		}
-		return enc.EncodeValue(reflect.ValueOf(dt))
+		return dt.encodeMsgpack(enc, p)
 	case *byteStream:
 		if err := encodeMapStart(enc, "ByteStream"); err != nil {
 			return err
 		}
-		return enc.EncodeValue(reflect.ValueOf(dt))
+		return dt.encodeMsgpack(enc, p)
 	case *empty, empty:
 		return enc.EncodeString("Empty")
 	default:
@@ -420,7 +422,7 @@ func (pv *pipelineValue) encodeMsgpack(enc *msgpack.Encoder, p *Plugin) error {
 	if err := pv.V.encodeMsgpack(enc, p); err != nil {
 		return fmt.Errorf("encoding PipelineDataHeader of Value: %w", err)
 	}
-	return pv.M.EncodeMsgpack(enc)
+	return pv.M.encodeMsgpack(enc, p)
 }
 
 func (pv *pipelineValue) decodeMsgpack(dec *msgpack.Decoder, p *Plugin) error {
@@ -434,18 +436,118 @@ func (pv *pipelineValue) decodeMsgpack(dec *msgpack.Decoder, p *Plugin) error {
 	if err = pv.V.decodeMsgpack(dec, p); err != nil {
 		return fmt.Errorf("decoding Value: %w", err)
 	}
-	if err = pv.M.DecodeMsgpack(dec); err != nil {
+	if err = pv.M.decodeMsgpack(dec, p); err != nil {
 		return fmt.Errorf("decoding Value's metadata: %w", err)
 	}
 	return nil
 }
 
-func (md *pipelineMetadata) EncodeMsgpack(enc *msgpack.Encoder) error {
-	if md.DataSource == "" && md.ContentType == "" {
+func (ls *listStream) encodeMsgpack(enc *msgpack.Encoder, p *Plugin) error {
+	if err := enc.EncodeMapLen(3); err != nil {
+		return err
+	}
+
+	if err := enc.EncodeString("id"); err != nil {
+		return err
+	}
+	if err := enc.EncodeInt(int64(ls.ID)); err != nil {
+		return err
+	}
+
+	if err := enc.EncodeString("span"); err != nil {
+		return err
+	}
+	if err := ls.Span.encodeMsgpack(enc); err != nil {
+		return err
+	}
+
+	if err := enc.EncodeString("metadata"); err != nil {
+		return err
+	}
+	if err := ls.MD.encodeMsgpack(enc, p); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (ls *listStream) decodeMsgpack(dec *msgpack.Decoder, p *Plugin) error {
+	return decodeMap("listStream", dec, func(dec *msgpack.Decoder, key string) (err error) {
+		switch key {
+		case "id":
+			ls.ID, err = dec.DecodeInt()
+			return err
+		case "span":
+			return ls.Span.decodeMsgpack(dec)
+		case "metadata":
+			return ls.MD.decodeMsgpack(dec, p)
+		default:
+			return errUnknownField
+		}
+	})
+}
+
+func (bs *byteStream) encodeMsgpack(enc *msgpack.Encoder, p *Plugin) error {
+	if err := enc.EncodeMapLen(4); err != nil {
+		return err
+	}
+
+	if err := enc.EncodeString("id"); err != nil {
+		return err
+	}
+	if err := enc.EncodeInt(int64(bs.ID)); err != nil {
+		return err
+	}
+
+	if err := enc.EncodeString("span"); err != nil {
+		return err
+	}
+	if err := bs.Span.encodeMsgpack(enc); err != nil {
+		return err
+	}
+
+	if err := enc.EncodeString("type"); err != nil {
+		return err
+	}
+	if err := enc.EncodeString(bs.Type); err != nil {
+		return err
+	}
+
+	if err := enc.EncodeString("metadata"); err != nil {
+		return err
+	}
+	if err := bs.MD.encodeMsgpack(enc, p); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (bs *byteStream) decodeMsgpack(dec *msgpack.Decoder, p *Plugin) error {
+	return decodeMap("byteStream", dec, func(dec *msgpack.Decoder, key string) (err error) {
+		switch key {
+		case "id":
+			bs.ID, err = dec.DecodeInt()
+			return err
+		case "span":
+			return bs.Span.decodeMsgpack(dec)
+		case "metadata":
+			return bs.MD.decodeMsgpack(dec, p)
+		case "type":
+			bs.Type, err = dec.DecodeString()
+			return err
+		default:
+			return errUnknownField
+		}
+	})
+}
+
+func (md *pipelineMetadata) encodeMsgpack(enc *msgpack.Encoder, p *Plugin) error {
+	if (md.DataSource == "" || md.DataSource == "None") && md.ContentType == "" && len(md.Custom) == 0 {
 		return enc.EncodeNil()
 	}
 
-	if err := enc.EncodeMapLen(2); err != nil {
+	if err := enc.EncodeMapLen(3); err != nil {
 		return err
 	}
 
@@ -461,6 +563,9 @@ func (md *pipelineMetadata) EncodeMsgpack(enc *msgpack.Encoder) error {
 			return err
 		}
 	default:
+		if md.DataSource == "" {
+			md.DataSource = "None"
+		}
 		if err := enc.EncodeString(md.DataSource); err != nil {
 			return err
 		}
@@ -470,17 +575,34 @@ func (md *pipelineMetadata) EncodeMsgpack(enc *msgpack.Encoder) error {
 		return err
 	}
 	if md.ContentType == "" {
-		return enc.EncodeNil()
+		if err := enc.EncodeNil(); err != nil {
+			return err
+		}
 	} else {
 		if err := enc.EncodeString(md.ContentType); err != nil {
 			return fmt.Errorf("encode ContentType value: %w", err)
 		}
 	}
 
+	if err := enc.EncodeString("custom"); err != nil {
+		return err
+	}
+	if err := enc.EncodeMapLen(len(md.Custom)); err != nil {
+		return err
+	}
+	for k, v := range md.Custom {
+		if err := enc.EncodeString(k); err != nil {
+			return err
+		}
+		if err := v.encodeMsgpack(enc, p); err != nil {
+			return fmt.Errorf("encode record field %s value: %w", k, err)
+		}
+	}
+
 	return nil
 }
 
-func (md *pipelineMetadata) DecodeMsgpack(dec *msgpack.Decoder) error {
+func (md *pipelineMetadata) decodeMsgpack(dec *msgpack.Decoder, p *Plugin) error {
 	c, err := dec.PeekCode()
 	if err != nil {
 		return err
@@ -507,6 +629,7 @@ func (md *pipelineMetadata) DecodeMsgpack(dec *msgpack.Decoder) error {
 			case "data_source":
 				switch {
 				case msgpcode.IsString(c):
+					// expect one of `Ls`, `HtmlThemes`, `FilePath`, `None`
 					if md.DataSource, err = dec.DecodeString(); err != nil {
 						return fmt.Errorf("decoding DataSource value: %w", err)
 					}
@@ -541,6 +664,10 @@ func (md *pipelineMetadata) DecodeMsgpack(dec *msgpack.Decoder) error {
 				default:
 					return fmt.Errorf("unexpected value code %x for %q", c, key)
 				}
+			case "custom":
+				if md.Custom, err = decodeRecord(dec, p); err != nil {
+					return fmt.Errorf("decoding custom metadata record: %w", err)
+				}
 			default:
 				return fmt.Errorf("unexpected metadata key %q", key)
 			}
@@ -548,5 +675,13 @@ func (md *pipelineMetadata) DecodeMsgpack(dec *msgpack.Decoder) error {
 		return nil
 	default:
 		return fmt.Errorf("unexpected Value metadata, code %x", c)
+	}
+}
+
+func (md *pipelineMetadata) addCustom(data Record) {
+	if md.Custom == nil {
+		md.Custom = maps.Clone(data)
+	} else {
+		maps.Copy(md.Custom, data)
 	}
 }

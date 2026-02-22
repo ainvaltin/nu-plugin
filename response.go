@@ -35,6 +35,7 @@ type ExecCommand struct {
 		- io.ReadCloser: raw stream;
 	*/
 	Input any
+	md    pipelineMetadata
 
 	p      *Plugin
 	callID int // call ID which launched the cmd
@@ -97,7 +98,7 @@ func (ec *ExecCommand) ReturnValue(ctx context.Context, v Value) error {
 		return fmt.Errorf("response has been already sent")
 	}
 
-	rsp := callResponse{ID: ec.callID, Response: &pipelineData{Data: v}}
+	rsp := callResponse{ID: ec.callID, Response: &pipelineData{Data: pipelineValue{V: v, M: ec.md}}}
 	return ec.p.outputMsg(ctx, &rsp)
 }
 
@@ -110,7 +111,7 @@ been failed and prints that error message.
 To signal the end of data chan must be closed (even when sending error)!
 */
 func (ec *ExecCommand) ReturnListStream(ctx context.Context) (chan<- Value, error) {
-	out := newOutputListValue(ec.p)
+	out := newOutputListValue(ec.p, ec.md)
 	out.onDrop = func() { ec.cancel(ErrDropStream) }
 
 	if !ec.output.CompareAndSwap(nil, out) {
@@ -136,7 +137,7 @@ Cancelling the context (ctx) will also "stop" the output stream, ie it
 signals that the plugin is about to quit and all work has to be abandoned.
 */
 func (ec *ExecCommand) ReturnRawStream(ctx context.Context, opts ...RawStreamOption) (io.WriteCloser, error) {
-	out := newOutputListRaw(ec.p, opts...)
+	out := newOutputListRaw(ec.p, ec.md, opts...)
 	out.onDrop = func() { ec.cancel(ErrDropStream) }
 
 	if !ec.output.CompareAndSwap(nil, out) {
@@ -248,6 +249,15 @@ func FilePath(fileName string) RawStreamOption {
 		rc.md.DataSource = "FilePath"
 		rc.md.ContentType = mime.TypeByExtension(filepath.Ext(fileName))
 	}}
+}
+
+/*
+Metadata allows to pass custom metadata values with the stream.
+
+To avoid key collisions, it is recommended to use namespaced keys with an underscore separator.
+*/
+func Metadata(data Record) RawStreamOption {
+	return rawStreamOpt{fn: func(rc *rawStreamCfg) { rc.md.addCustom(data) }}
 }
 
 type commandsInFlight struct {

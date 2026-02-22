@@ -1,3 +1,13 @@
+## [2026-02-22]
+ - Improved support for pipeline metadata.
+   * Incoming custom metadata caused parsing error;
+   * Metadata is now passed on to the next command in the pipeline;
+   * BinaryStream response supports adding custom metadata;
+
+## [2026-02-15]
+ - Misc fixes in custom value support (it now has Save method,
+   followPath* message format changes);
+
 ## [2026-02-13]
 - Plugin protocol version 0.108.0
 - Support for saving custom values to disk

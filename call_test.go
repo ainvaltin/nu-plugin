@@ -13,13 +13,13 @@ func Test_pipelineMetadata_DeEncode(t *testing.T) {
 	t.Run("input == output", func(t *testing.T) {
 		testCases := []pipelineMetadata{
 			{DataSource: ""},
-			{DataSource: "None"},
-			{DataSource: "None", ContentType: "application/json"},
-			{DataSource: "Ls"},
-			{DataSource: "FilePath"},
-			{DataSource: "FilePath", FilePath: "/foo/bar.json"},
-			{DataSource: "FilePath", FilePath: "", ContentType: "text/html"},
-			{DataSource: "FilePath", FilePath: "test.html", ContentType: "text/html"},
+			{DataSource: "None", ContentType: "application/json", Custom: Record{}},
+			{DataSource: "Ls", Custom: Record{}},
+			{DataSource: "FilePath", Custom: Record{}},
+			{DataSource: "FilePath", FilePath: "/foo/bar.json", Custom: Record{}},
+			{DataSource: "FilePath", FilePath: "", ContentType: "text/html", Custom: Record{}},
+			{DataSource: "FilePath", FilePath: "test.html", ContentType: "text/html", Custom: Record{}},
+			{DataSource: "None", Custom: Record{"n1": ToValue("v1")}},
 		}
 
 		for x, tc := range testCases {
@@ -42,30 +42,45 @@ func Test_pipelineMetadata_DeEncode(t *testing.T) {
 			in  pipelineMetadata // data to be encoded
 			out pipelineMetadata // what we expect to get after serialization roundtrip
 		}{
+			// DataSource None will be sent as nil (when all other fields are empty), ie we get back empty MD
+			{
+				in:  pipelineMetadata{DataSource: "None"},
+				out: pipelineMetadata{},
+			},
 			// FilePath property is only valid (and serialized) when DataSource=="FilePath"
+			// if we serialize and DataSource is empty we default to None
 			{
 				in:  pipelineMetadata{DataSource: "", FilePath: "foo.htm", ContentType: "text/html"},
-				out: pipelineMetadata{DataSource: "", FilePath: "", ContentType: "text/html"},
+				out: pipelineMetadata{DataSource: "None", FilePath: "", ContentType: "text/html", Custom: Record{}},
 			},
 			{
 				in:  pipelineMetadata{DataSource: "Ls", FilePath: "foo.htm", ContentType: "text/html"},
-				out: pipelineMetadata{DataSource: "Ls", FilePath: "", ContentType: "text/html"},
+				out: pipelineMetadata{DataSource: "Ls", FilePath: "", ContentType: "text/html", Custom: Record{}},
 			},
 			{
 				in:  pipelineMetadata{DataSource: "None", FilePath: "foo.htm", ContentType: "text/html"},
-				out: pipelineMetadata{DataSource: "None", FilePath: "", ContentType: "text/html"},
+				out: pipelineMetadata{DataSource: "None", FilePath: "", ContentType: "text/html", Custom: Record{}},
 			},
 		}
 
+		p := &Plugin{}
+		enc := msgpack.GetEncoder()
+		defer msgpack.PutEncoder(enc)
+
 		for x, tc := range testCases {
-			bin, err := msgpack.Marshal(&tc.in)
-			if err != nil {
+			var buf bytes.Buffer
+			enc.Reset(&buf)
+			if err := tc.in.encodeMsgpack(enc, p); err != nil {
 				t.Fatalf("[%d] failed to marshal: %v", x, err)
 			}
+
 			var mdB pipelineMetadata
-			if err := msgpack.Unmarshal(bin, &mdB); err != nil {
+			dec := msgpack.NewDecoder(&buf)
+			dec.SetMapDecoder(decodeNuMsgAll(p, p.handleMsgDecode))
+			if err := mdB.decodeMsgpack(dec, p); err != nil {
 				t.Fatalf("[%d] failed to unmarshal: %v", x, err)
 			}
+
 			if diff := cmp.Diff(tc.out, mdB); diff != "" {
 				t.Fatalf("[%d] mismatch (-want +got):\n%s", x, diff)
 			}
@@ -79,7 +94,7 @@ func Test_Call_DeEncode_happy(t *testing.T) {
 	testCases := []call{
 		{ID: 1, Call: signature{}},
 		{ID: 0, Call: run{Name: "inc", Input: empty{}, Call: evaluatedCall{Head: Span{Start: 40400, End: 40403}, Positional: []Value{}, Named: NamedParams{}}}},
-		{ID: 0, Call: run{Name: "inc", Input: Value{Value: int64(2), Span: Span{Start: 9090, End: 9093}}, Call: evaluatedCall{Head: Span{Start: 40400, End: 40403}, Positional: []Value{}, Named: NamedParams{}}}},
+		{ID: 0, Call: run{Name: "inc", Input: pipelineValue{V: Value{Value: int64(2), Span: Span{Start: 9090, End: 9093}}}, Call: evaluatedCall{Head: Span{Start: 40400, End: 40403}, Positional: []Value{}, Named: NamedParams{}}}},
 		{ID: 0, Call: run{Name: "inc", Input: listStream{ID: 2}, Call: evaluatedCall{Head: Span{Start: 40400, End: 40403}, Positional: []Value{}, Named: NamedParams{}}}},
 		{ID: 2, Call: run{Name: "inc", Input: empty{}, Call: evaluatedCall{Head: Span{Start: 40400, End: 40403}, Positional: []Value{{Value: "0.1.2", Span: Span{Start: 40407, End: 40415}}}, Named: NamedParams{}}}},
 		{ID: 2, Call: run{Name: "inc", Input: empty{}, Call: evaluatedCall{Head: Span{Start: 40400, End: 40403}, Positional: []Value{{Value: "0.1.2", Span: Span{Start: 40407, End: 40415}}}, Named: NamedParams{"major": Value{Value: true, Span: Span{Start: 40404, End: 40406}}}}}},
@@ -148,8 +163,8 @@ func (r *run) encodeMsgpack(enc *msgpack.Encoder, p *Plugin) error {
 	switch iv := r.Input.(type) {
 	case nil, empty, *empty:
 		return enc.EncodeString("Empty")
-	case Value:
-		return (&pipelineValue{V: iv}).encodeMsgpack(enc, p)
+	case pipelineValue:
+		return iv.encodeMsgpack(enc, p)
 	case listStream:
 		if err := encodeMapStart(enc, "ListStream"); err != nil {
 			return err

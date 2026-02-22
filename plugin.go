@@ -283,7 +283,7 @@ func (p *Plugin) handleRun(ctx context.Context, msg run, callID int) error {
 	ctx, exec.cancel = context.WithCancelCause(ctx)
 
 	var err error
-	if exec.Input, err = p.getInput(ctx, msg.Input); err != nil {
+	if exec.Input, exec.md, err = p.getInput(ctx, msg.Input); err != nil {
 		return err
 	}
 
@@ -298,7 +298,7 @@ func (p *Plugin) handleRun(ctx context.Context, msg run, callID int) error {
 		// if cmd response is stream then close it
 		exec.closeOutputStream(ctx)
 
-		// if we haven't sent response jet (not stream) send Empty response
+		// if we haven't sent response yet (not stream) send Empty response
 		if err := exec.returnNothing(ctx); err != nil {
 			p.log.ErrorContext(ctx, "sending 'Empty' response", attrError(err), attrCallID(callID))
 		}
@@ -311,12 +311,12 @@ func (p *Plugin) handleRun(ctx context.Context, msg run, callID int) error {
 given instance of internal type returns instance of type the plugin author uses to
 consume the input data.
 */
-func (p *Plugin) getInput(ctx context.Context, input any) (any, error) {
+func (p *Plugin) getInput(ctx context.Context, input any) (any, pipelineMetadata, error) {
 	switch it := input.(type) {
 	case empty, nil:
-		return nil, nil
-	case Value:
-		return it, nil
+		return nil, pipelineMetadata{}, nil
+	case pipelineValue:
+		return it.V, it.M, nil
 	case listStream:
 		ls := newInputStreamList(it.ID)
 		ls.onAck = func(ctx context.Context, ID int) {
@@ -328,7 +328,7 @@ func (p *Plugin) getInput(ctx context.Context, input any) (any, error) {
 		p.inls[it.ID] = ls
 		p.iom.Unlock()
 		ls.Run(ctx)
-		return ls.InputStream(), nil
+		return ls.InputStream(), it.MD, nil
 	case byteStream:
 		ls := newInputStreamRaw(it.ID)
 		ls.onAck = func(ctx context.Context, ID int) {
@@ -340,11 +340,11 @@ func (p *Plugin) getInput(ctx context.Context, input any) (any, error) {
 		p.inls[ls.id] = ls
 		p.iom.Unlock()
 		ls.Run(ctx)
-		return ls.rdr, nil
+		return ls.rdr, it.MD, nil
 	case Error:
-		return nil, &it
+		return nil, pipelineMetadata{}, &it
 	default:
-		return nil, fmt.Errorf("unsupported input type: %T", it)
+		return nil, pipelineMetadata{}, fmt.Errorf("unsupported input type: %T", it)
 	}
 }
 

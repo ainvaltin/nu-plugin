@@ -225,7 +225,7 @@ func Test_Plugin_response(t *testing.T) {
 
 		runEngine(t, p, append(protocolPrelude,
 			msgDef{send: &call{ID: 1, Call: run{Name: "inc"}}},
-			msgDef{recv: callResponse{ID: 1, Response: pipelineData{Data: Value{Value: int64(42)}}}},
+			msgDef{recv: callResponse{ID: 1, Response: pipelineData{Data: pipelineValue{V: Value{Value: int64(42)}}}}},
 		))
 	})
 
@@ -361,7 +361,7 @@ func Test_Plugin_input(t *testing.T) {
 		}
 
 		runEngine(t, p, append(protocolPrelude,
-			msgDef{send: &call{ID: 1, Call: run{Name: "inc", Input: Value{Value: "input"}}}},
+			msgDef{send: &call{ID: 1, Call: run{Name: "inc", Input: pipelineValue{V: Value{Value: "input"}}}}},
 		))
 	})
 

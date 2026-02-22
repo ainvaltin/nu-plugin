@@ -6,19 +6,19 @@ import (
 	"io"
 )
 
-func newOutputListRaw(p *Plugin, opts ...RawStreamOption) *rawStreamOut {
-	out := initOutputListRaw(int(p.idGen.Add(1)), opts...)
+func newOutputListRaw(p *Plugin, md pipelineMetadata, opts ...RawStreamOption) *rawStreamOut {
+	out := initOutputListRaw(int(p.idGen.Add(1)), md, opts...)
 	out.sender = p.outputMsg
 
 	return out
 }
 
-func initOutputListRaw(id int, opts ...RawStreamOption) *rawStreamOut {
+func initOutputListRaw(id int, md pipelineMetadata, opts ...RawStreamOption) *rawStreamOut {
 	out := &rawStreamOut{
 		id:   id,
 		done: make(chan struct{}),
 		sent: make(chan struct{}, 1),
-		cfg:  rawStreamCfg{bufSize: 1024, dataType: "Unknown"},
+		cfg:  rawStreamCfg{bufSize: 1024, dataType: "Unknown", md: md},
 	}
 	out.rdr, out.data = io.Pipe()
 
@@ -111,13 +111,14 @@ func (rc *rawStreamOut) drop() {
 	rc.rdr.CloseWithError(ErrDropStream)
 }
 
-func newOutputListValue(p *Plugin) *listStreamOut {
+func newOutputListValue(p *Plugin, md pipelineMetadata) *listStreamOut {
 	out := &listStreamOut{
 		id:     int(p.idGen.Add(1)),
 		done:   make(chan struct{}),
 		sent:   make(chan struct{}, 1),
 		data:   make(chan Value),
 		sender: p.outputMsg,
+		md:     md,
 	}
 	return out
 }
@@ -129,11 +130,12 @@ type listStreamOut struct {
 	data   chan Value
 	sender func(ctx context.Context, data any) error
 	onDrop func()
+	md     pipelineMetadata
 }
 
 func (rc *listStreamOut) streamID() int { return rc.id }
 
-func (rc *listStreamOut) pipelineDataHdr() any { return &listStream{ID: rc.id} }
+func (rc *listStreamOut) pipelineDataHdr() any { return &listStream{ID: rc.id, MD: rc.md} }
 
 func (rc *listStreamOut) run(ctx context.Context) error {
 	defer close(rc.done)

@@ -314,7 +314,8 @@ func (ec *ExecCommand) EvalClosure(ctx context.Context, closure Value, args ...E
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	case v := <-ch:
-		return ec.p.getInput(ctx, v)
+		i, _, err := ec.p.getInput(ctx, v)
+		return i, err
 	}
 }
 
@@ -443,7 +444,8 @@ func (d Declaration) Call(ctx context.Context, args ...EvalArgument) (any, error
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	case v := <-ch:
-		return d.ec.p.getInput(ctx, v)
+		i, _, err := d.ec.p.getInput(ctx, v)
+		return i, err
 	}
 }
 
@@ -560,7 +562,7 @@ func InputValue(arg Value) EvalArgument {
 
 func InputListStream(arg <-chan Value) EvalArgument {
 	return evalArgument{fn: func(ec *evalArguments) error {
-		out := newOutputListValue(ec.p)
+		out := newOutputListValue(ec.p, pipelineMetadata{})
 		if err := ec.setInput(&listStream{ID: out.id}); err != nil {
 			return err
 		}
@@ -584,7 +586,7 @@ func InputListStream(arg <-chan Value) EvalArgument {
 
 func InputRawStream(arg io.Reader) EvalArgument {
 	return evalArgument{fn: func(ec *evalArguments) error {
-		out := newOutputListRaw(ec.p)
+		out := newOutputListRaw(ec.p, pipelineMetadata{})
 		if err := ec.setInput(&byteStream{ID: out.id, Type: "Unknown"}); err != nil {
 			return err
 		}

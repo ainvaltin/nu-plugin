@@ -14,7 +14,7 @@ import (
 func Test_rawStreamOut(t *testing.T) {
 	t.Run("sending data blocks until Ack-ed", func(t *testing.T) {
 		consumer := bytes.NewBuffer(nil)
-		ls := initOutputListRaw(1)
+		ls := initOutputListRaw(1, pipelineMetadata{})
 		ls.cfg.bufSize = 5
 		ls.sender = func(ctx context.Context, d any) error {
 			v := d.(*data)
@@ -74,7 +74,7 @@ func Test_rawStreamOut(t *testing.T) {
 	})
 
 	t.Run("multiple writes collected and sent", func(t *testing.T) {
-		ls := initOutputListRaw(1)
+		ls := initOutputListRaw(1, pipelineMetadata{})
 		// we set buf size so big that we do not expect any send calls
 		ls.cfg.bufSize = 1024
 		ls.sender = func(ctx context.Context, d any) error {
@@ -125,7 +125,7 @@ func Test_rawStreamOut(t *testing.T) {
 		pluginOut := bytes.NewBuffer(nil)
 		engine := make(chan []byte, 1)
 
-		ls := initOutputListRaw(1)
+		ls := initOutputListRaw(1, pipelineMetadata{})
 
 		go func() {
 			for v := range engine {
@@ -170,7 +170,7 @@ func Test_rawStreamOut(t *testing.T) {
 	})
 
 	t.Run("not sending anything", func(t *testing.T) {
-		ls := initOutputListRaw(1)
+		ls := initOutputListRaw(1, pipelineMetadata{})
 		ls.sender = func(ctx context.Context, d any) error { t.Errorf("unexpected call: %#v", d); return nil }
 
 		runDone := make(chan error)
@@ -194,7 +194,7 @@ func Test_rawStreamOut(t *testing.T) {
 	})
 
 	t.Run("two Ack-s in a row", func(t *testing.T) {
-		ls := initOutputListRaw(77)
+		ls := initOutputListRaw(77, pipelineMetadata{})
 		if err := ls.ack(); err != nil {
 			t.Errorf("first Ack should not have returned error but got: %v", err)
 		}
@@ -210,7 +210,7 @@ func Test_rawStreamOut(t *testing.T) {
 
 func Test_listStreamOut(t *testing.T) {
 	t.Run("sending data blocks until Ack-ed", func(t *testing.T) {
-		ls := newOutputListValue(&Plugin{})
+		ls := newOutputListValue(&Plugin{}, pipelineMetadata{})
 		ls.sender = func(ctx context.Context, data any) error { return nil }
 
 		runDone := make(chan error)
@@ -253,7 +253,7 @@ func Test_listStreamOut(t *testing.T) {
 	t.Run("do not send anything", func(t *testing.T) {
 		p := &Plugin{}
 		p.idGen.Add(76)
-		ls := newOutputListValue(p)
+		ls := newOutputListValue(p, pipelineMetadata{})
 
 		runDone := make(chan error)
 		go func() {
@@ -275,7 +275,7 @@ func Test_listStreamOut(t *testing.T) {
 
 	t.Run("ctx cancel stops the loop: waiting input", func(t *testing.T) {
 		runDone := make(chan error)
-		ls := newOutputListValue(&Plugin{})
+		ls := newOutputListValue(&Plugin{}, pipelineMetadata{})
 		ls.sender = func(ctx context.Context, data any) error { return nil }
 
 		ctx, cancel := context.WithCancel(context.Background())
@@ -297,7 +297,7 @@ func Test_listStreamOut(t *testing.T) {
 
 	t.Run("ctx cancel stops the loop: waiting ack", func(t *testing.T) {
 		runDone := make(chan error)
-		ls := newOutputListValue(&Plugin{})
+		ls := newOutputListValue(&Plugin{}, pipelineMetadata{})
 		ls.sender = func(ctx context.Context, data any) error { return nil }
 
 		ctx, cancel := context.WithCancel(context.Background())
@@ -319,7 +319,7 @@ func Test_listStreamOut(t *testing.T) {
 	})
 
 	t.Run("two Ack-s in a row", func(t *testing.T) {
-		ls := newOutputListValue(&Plugin{})
+		ls := newOutputListValue(&Plugin{}, pipelineMetadata{})
 		if err := ls.ack(); err != nil {
 			t.Errorf("first Ack should not have returned error but got: %v", err)
 		}
