@@ -132,22 +132,100 @@ func decodeMap(name string, dec *msgpack.Decoder, decodeKey func(dec *msgpack.De
 	return nil
 }
 
+type msgpackEncFunc func(enc *msgpack.Encoder, p *Plugin) error
+
+/*
+encodeMap encodes fixed size map using the enc - it writes the number of items and
+then calls each item to serialize the actual key - value pair.
+*/
+func encodeMap(p *Plugin, enc *msgpack.Encoder, items ...msgpackEncFunc) error {
+	if err := enc.EncodeMapLen(len(items)); err != nil {
+		return fmt.Errorf("encoding map length: %w", err)
+	}
+	for _, f := range items {
+		if err := f(enc, p); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+/*
+use with encodeMap to store string value
+*/
+func writeMapItemString(key, value string) msgpackEncFunc {
+	return func(enc *msgpack.Encoder, p *Plugin) (err error) {
+		if err = enc.EncodeString(key); err != nil {
+			return fmt.Errorf("encoding key %q: %w", key, err)
+		}
+		if err = enc.EncodeString(value); err != nil {
+			return fmt.Errorf("encoding value of the key %q: %w", key, err)
+		}
+		return nil
+	}
+}
+
+/*
+use with encodeMap to store int value
+*/
+func writeMapItemInt(key string, value int) msgpackEncFunc {
+	return func(enc *msgpack.Encoder, p *Plugin) (err error) {
+		if err = enc.EncodeString(key); err != nil {
+			return fmt.Errorf("encoding key %q: %w", key, err)
+		}
+		if err = enc.EncodeInt(int64(value)); err != nil {
+			return fmt.Errorf("encoding value of the key %q: %w", key, err)
+		}
+		return nil
+	}
+}
+
+/*
+use with encodeMap to store complex value which implements encodeMsgpack method.
+*/
+func writeMapItemFunc(key string, wf msgpackEncFunc) msgpackEncFunc {
+	return func(enc *msgpack.Encoder, p *Plugin) (err error) {
+		if err = enc.EncodeString(key); err != nil {
+			return fmt.Errorf("encoding key %q: %w", key, err)
+		}
+		if err = wf(enc, p); err != nil {
+			return fmt.Errorf("encoding value of the key %q: %w", key, err)
+		}
+		return nil
+	}
+}
+
+/*
+Callback is the "standard marshaler" signature.
+*/
+func writeMapItemFuncMsgpack(key string, wf func(enc *msgpack.Encoder) error) msgpackEncFunc {
+	return func(enc *msgpack.Encoder, p *Plugin) (err error) {
+		if err = enc.EncodeString(key); err != nil {
+			return fmt.Errorf("encoding key %q: %w", key, err)
+		}
+		if err = wf(enc); err != nil {
+			return fmt.Errorf("encoding value of the key %q: %w", key, err)
+		}
+		return nil
+	}
+}
+
 func encodeString(enc *msgpack.Encoder, key, value string) (err error) {
 	if err = enc.EncodeString(key); err != nil {
-		return fmt.Errorf("encoding key %q", key)
+		return fmt.Errorf("encoding key %q: %w", key, err)
 	}
 	if err = enc.EncodeString(value); err != nil {
-		return fmt.Errorf("encoding value of the key %q", key)
+		return fmt.Errorf("encoding value of the key %q: %w", key, err)
 	}
 	return nil
 }
 
 func encodeBoolean(enc *msgpack.Encoder, key string, value bool) (err error) {
 	if err = enc.EncodeString(key); err != nil {
-		return fmt.Errorf("encoding key %q", key)
+		return fmt.Errorf("encoding key %q: %w", key, err)
 	}
 	if err = enc.EncodeBool(value); err != nil {
-		return fmt.Errorf("encoding value of the key %q", key)
+		return fmt.Errorf("encoding value of the key %q: %w", key, err)
 	}
 	return nil
 }

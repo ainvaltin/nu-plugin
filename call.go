@@ -443,31 +443,14 @@ func (pv *pipelineValue) decodeMsgpack(dec *msgpack.Decoder, p *Plugin) error {
 }
 
 func (ls *listStream) encodeMsgpack(enc *msgpack.Encoder, p *Plugin) error {
-	if err := enc.EncodeMapLen(3); err != nil {
-		return err
+	err := encodeMap(p, enc,
+		writeMapItemInt("id", ls.ID),
+		writeMapItemFunc("metadata", ls.MD.encodeMsgpack),
+		writeMapItemFuncMsgpack("span", ls.Span.encodeMsgpack),
+	)
+	if err != nil {
+		return fmt.Errorf("encoding listStream: %w", err)
 	}
-
-	if err := enc.EncodeString("id"); err != nil {
-		return err
-	}
-	if err := enc.EncodeInt(int64(ls.ID)); err != nil {
-		return err
-	}
-
-	if err := enc.EncodeString("span"); err != nil {
-		return err
-	}
-	if err := ls.Span.encodeMsgpack(enc); err != nil {
-		return err
-	}
-
-	if err := enc.EncodeString("metadata"); err != nil {
-		return err
-	}
-	if err := ls.MD.encodeMsgpack(enc, p); err != nil {
-		return err
-	}
-
 	return nil
 }
 
@@ -488,38 +471,15 @@ func (ls *listStream) decodeMsgpack(dec *msgpack.Decoder, p *Plugin) error {
 }
 
 func (bs *byteStream) encodeMsgpack(enc *msgpack.Encoder, p *Plugin) error {
-	if err := enc.EncodeMapLen(4); err != nil {
-		return err
+	err := encodeMap(p, enc,
+		writeMapItemInt("id", bs.ID),
+		writeMapItemString("type", bs.Type),
+		writeMapItemFunc("metadata", bs.MD.encodeMsgpack),
+		writeMapItemFuncMsgpack("span", bs.Span.encodeMsgpack),
+	)
+	if err != nil {
+		return fmt.Errorf("encoding byteStream: %w", err)
 	}
-
-	if err := enc.EncodeString("id"); err != nil {
-		return err
-	}
-	if err := enc.EncodeInt(int64(bs.ID)); err != nil {
-		return err
-	}
-
-	if err := enc.EncodeString("span"); err != nil {
-		return err
-	}
-	if err := bs.Span.encodeMsgpack(enc); err != nil {
-		return err
-	}
-
-	if err := enc.EncodeString("type"); err != nil {
-		return err
-	}
-	if err := enc.EncodeString(bs.Type); err != nil {
-		return err
-	}
-
-	if err := enc.EncodeString("metadata"); err != nil {
-		return err
-	}
-	if err := bs.MD.encodeMsgpack(enc, p); err != nil {
-		return err
-	}
-
 	return nil
 }
 
@@ -678,6 +638,9 @@ func (md *pipelineMetadata) decodeMsgpack(dec *msgpack.Decoder, p *Plugin) error
 	}
 }
 
+/*
+addCustom adds values from the data record to current metadata.
+*/
 func (md *pipelineMetadata) addCustom(data Record) {
 	if md.Custom == nil {
 		md.Custom = maps.Clone(data)
