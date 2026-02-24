@@ -2,14 +2,22 @@ package nu
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 )
 
+// make it possible for the plugin to set this value?
+// could do via config struct - global for all commands
+// or param for Run of command for command specific value
+const inputStreamBufferSize = 100
+
+var errStreamBufFull = errors.New("input stream buffer is full")
+
 func newInputStreamRaw(id int) *rawStreamIn {
 	out := &rawStreamIn{
 		id:  id,
-		buf: make(chan []byte, 10),
+		buf: make(chan []byte, inputStreamBufferSize),
 	}
 	out.rdr, out.data = io.Pipe()
 	return out
@@ -52,7 +60,13 @@ func (lsi *rawStreamIn) received(ctx context.Context, v any) error {
 	if !ok {
 		return fmt.Errorf("raw stream input must be of type []byte, got %T", v)
 	}
-	lsi.buf <- in
+
+	select {
+	case lsi.buf <- in:
+	default:
+		return errStreamBufFull
+	}
+
 	return nil
 }
 
@@ -64,7 +78,7 @@ func newInputStreamList(id int) *listStreamIn {
 	in := &listStreamIn{
 		id:   id,
 		data: make(chan Value),
-		buf:  make(chan Value, 10),
+		buf:  make(chan Value, inputStreamBufferSize),
 	}
 	return in
 }
@@ -120,7 +134,13 @@ func (lsi *listStreamIn) received(ctx context.Context, v any) error {
 	if !ok {
 		return fmt.Errorf("list stream input must be of type Value, got %T", v)
 	}
-	lsi.buf <- in
+
+	select {
+	case lsi.buf <- in:
+	default:
+		return errStreamBufFull
+	}
+
 	return nil
 }
 
