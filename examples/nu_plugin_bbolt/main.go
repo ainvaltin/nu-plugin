@@ -51,7 +51,7 @@ func main() {
 		return
 	}
 	if err := p.Run(quitSignalContext()); err != nil && !errors.Is(err, nu.ErrGoodbye) {
-		fmt.Fprintln(os.Stderr, "plugin exited with error", err)
+		fmt.Fprintln(os.Stderr, "plugin exited with error:", err)
 	}
 }
 
