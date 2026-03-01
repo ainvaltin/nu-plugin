@@ -223,7 +223,7 @@ func (p *Plugin) handleCustomValueOp(ctx context.Context, callID int, cvOp custo
 		if err != nil {
 			return err
 		}
-		rsp := callResponse{ID: callID, Response: &pipelineData{Data: v}}
+		rsp := callResponse{ID: callID, Response: &pipelineData{Data: pipelineValue{V: v}}}
 		return p.outputMsg(ctx, &rsp)
 	}
 
