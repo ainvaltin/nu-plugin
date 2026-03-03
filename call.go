@@ -82,6 +82,7 @@ type (
 		FilePath    string // assigned when DataSource == FilePath
 		ContentType string
 		Custom      Record
+		PathColumns []string
 	}
 )
 
@@ -627,6 +628,10 @@ func (md *pipelineMetadata) decodeMsgpack(dec *msgpack.Decoder, p *Plugin) error
 			case "custom":
 				if md.Custom, err = decodeRecord(dec, p); err != nil {
 					return fmt.Errorf("decoding custom metadata record: %w", err)
+				}
+			case "path_columns":
+				if err = dec.Decode(&md.PathColumns); err != nil {
+					return fmt.Errorf("decoding path columns: %w", err)
 				}
 			default:
 				return fmt.Errorf("unexpected metadata key %q", key)
