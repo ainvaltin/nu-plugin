@@ -82,6 +82,7 @@ type (
 		FilePath    string // assigned when DataSource == FilePath
 		ContentType string
 		Custom      Record
+		PathColumns []string
 	}
 )
 
@@ -503,11 +504,11 @@ func (bs *byteStream) decodeMsgpack(dec *msgpack.Decoder, p *Plugin) error {
 }
 
 func (md *pipelineMetadata) encodeMsgpack(enc *msgpack.Encoder, p *Plugin) error {
-	if (md.DataSource == "" || md.DataSource == "None") && md.ContentType == "" && len(md.Custom) == 0 {
+	if (md.DataSource == "" || md.DataSource == "None") && md.ContentType == "" && len(md.Custom) == 0 && len(md.PathColumns) == 0 {
 		return enc.EncodeNil()
 	}
 
-	if err := enc.EncodeMapLen(3); err != nil {
+	if err := enc.EncodeMapLen(4); err != nil {
 		return err
 	}
 
@@ -557,6 +558,14 @@ func (md *pipelineMetadata) encodeMsgpack(enc *msgpack.Encoder, p *Plugin) error
 		if err := v.encodeMsgpack(enc, p); err != nil {
 			return fmt.Errorf("encode record field %s value: %w", k, err)
 		}
+	}
+
+	// optional unless "data_source == Ls" ?
+	if err := enc.EncodeString("path_columns"); err != nil {
+		return err
+	}
+	if err := enc.Encode(md.PathColumns); err != nil {
+		return fmt.Errorf("encoding path columns: %w", err)
 	}
 
 	return nil
@@ -627,6 +636,10 @@ func (md *pipelineMetadata) decodeMsgpack(dec *msgpack.Decoder, p *Plugin) error
 			case "custom":
 				if md.Custom, err = decodeRecord(dec, p); err != nil {
 					return fmt.Errorf("decoding custom metadata record: %w", err)
+				}
+			case "path_columns":
+				if err = dec.Decode(&md.PathColumns); err != nil {
+					return fmt.Errorf("decoding path columns: %w", err)
 				}
 			default:
 				return fmt.Errorf("unexpected metadata key %q", key)
