@@ -129,6 +129,11 @@ func decodeCall(dec *msgpack.Decoder, p *Plugin) (any, error) {
 				return nil, fmt.Errorf("decoding Call %s: %w", name, err)
 			}
 			m.Call = r
+		case "GetCompletion":
+			if err := dec.Skip(); err != nil {
+				return nil, fmt.Errorf("skipping getCompletion message: %w", err)
+			}
+			m.Call = empty{}
 		default:
 			return nil, fmt.Errorf("unknown Call type %q", name)
 		}
