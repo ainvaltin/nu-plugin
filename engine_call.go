@@ -267,8 +267,10 @@ func (ec *ExecCommand) engineCallValueReturn(ctx context.Context, arg any) (*Val
 		switch tv := v.(type) {
 		case nil, empty:
 			return nil, nil
-		case Value:
-			return &tv, nil
+		case pipelineValue:
+			return &tv.V, nil
+		//case Value:
+		//	return &tv, nil
 		case Error:
 			return nil, &tv
 		default:

@@ -1,3 +1,10 @@
+## [2026-03-07]
+Update Type support
+ - There is no longer `ListStream` and `Signature` types;
+ - There is nwe type `OneOf`;
+ - Implement String method for Type;
+ - Support Type decoding from msgpack;
+
 ## [2026-02-22]
  - Improved support for pipeline metadata.
    * Incoming custom metadata caused parsing error;
