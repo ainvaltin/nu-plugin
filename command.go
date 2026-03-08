@@ -100,10 +100,10 @@ func (sig PluginSignature) encodeMsgpack(enc *msgpack.Encoder, p *Plugin) (err e
 	}
 
 	if err = enc.EncodeString("search_terms"); err != nil {
-		return err
+		return fmt.Errorf("encoding search_terms key: %w", err)
 	}
 	if err = enc.EncodeArrayLen(len(sig.SearchTerms)); err != nil {
-		return err
+		return fmt.Errorf("encoding search_terms array length: %w", err)
 	}
 	for _, v := range sig.SearchTerms {
 		if err = enc.EncodeString(v); err != nil {
@@ -264,9 +264,6 @@ func (p *Plugin) handleMsgDecode(dec *msgpack.Decoder, name string) (_ any, err 
 }
 
 func encodePositionalArgs(enc *msgpack.Encoder, pa []PositionalArg, p *Plugin) error {
-	if len(pa) == 0 {
-		return enc.EncodeArrayLen(0)
-	}
 	if err := enc.EncodeArrayLen(len(pa)); err != nil {
 		return err
 	}
@@ -363,9 +360,6 @@ func (flag *Flag) encodeMsgpack(enc *msgpack.Encoder, p *Plugin) (err error) {
 }
 
 func encodeFlags(enc *msgpack.Encoder, flags []Flag, p *Plugin) error {
-	if len(flags) == 0 {
-		return enc.EncodeArrayLen(0)
-	}
 	if err := enc.EncodeArrayLen(len(flags)); err != nil {
 		return err
 	}
@@ -378,9 +372,6 @@ func encodeFlags(enc *msgpack.Encoder, flags []Flag, p *Plugin) error {
 }
 
 func encodeExamples(enc *msgpack.Encoder, ex []Example, p *Plugin) error {
-	if len(ex) == 0 {
-		return enc.EncodeArrayLen(0)
-	}
 	if err := enc.EncodeArrayLen(len(ex)); err != nil {
 		return err
 	}

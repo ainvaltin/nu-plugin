@@ -1,7 +1,7 @@
 ## [2026-03-07]
 Update Type support
  - There is no longer `ListStream` and `Signature` types;
- - There is nwe type `OneOf`;
+ - There is new type `OneOf`;
  - Implement String method for Type;
  - Support Type decoding from msgpack;
 
