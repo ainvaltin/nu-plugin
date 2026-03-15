@@ -291,13 +291,6 @@ func (iot *expr) DecodeMsgpack(dec *msgpack.Decoder) error {
 			if iot.i, err = dec.DecodeInt64(); err != nil {
 				return fmt.Errorf("decode %s value: %w", iot.name, err)
 			}
-		case "Filepath", "Directory", "GlobPattern":
-			if iot.str, err = dec.DecodeString(); err != nil {
-				return fmt.Errorf("decode %s value: %w", iot.name, err)
-			}
-			if iot.b, err = dec.DecodeBool(); err != nil {
-				return fmt.Errorf("decode %s bool flag: %w", iot.name, err)
-			}
 		default:
 			iot.raw, err = dec.DecodeRaw()
 		}
