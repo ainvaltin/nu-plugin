@@ -175,6 +175,14 @@ type PositionalArg struct {
 	Shape   syntaxshape.SyntaxShape
 	VarId   uint
 	Default *Value
+	/*
+	   Function called when plugin engine requests suggestions for argument autocomplete.
+	   Return:
+	     - nil to signal that engine should fall back to default completion (default behavior);
+	     - empty (non nil) slice to signal that there is no suggestions;
+	     - non empty slice with suggestions;
+	*/
+	GetCompletions func() []DynamicSuggestion
 }
 
 /*
@@ -188,6 +196,14 @@ type Flag struct {
 	Desc     string
 	VarId    uint
 	Default  *Value
+	/*
+	   Function called when plugin engine requests suggestions for flag autocomplete.
+	   Return:
+	     - nil to signal that engine should fall back to default completion (default behavior);
+	     - empty (non nil) slice to signal that there is no suggestions;
+	     - non empty slice with suggestions;
+	*/
+	GetCompletions func() []DynamicSuggestion
 }
 
 type Example struct {

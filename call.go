@@ -130,10 +130,11 @@ func decodeCall(dec *msgpack.Decoder, p *Plugin) (any, error) {
 			}
 			m.Call = r
 		case "GetCompletion":
-			if err := dec.Skip(); err != nil {
-				return nil, fmt.Errorf("skipping getCompletion message: %w", err)
+			r := getCompletion{}
+			if err = dec.Decode(&r); err != nil {
+				return nil, fmt.Errorf("decoding GetCompletion Call: %w", err)
 			}
-			m.Call = empty{}
+			m.Call = r
 		default:
 			return nil, fmt.Errorf("unknown Call type %q", name)
 		}
@@ -369,8 +370,7 @@ func (cr *callResponse) encodeMsgpack(enc *msgpack.Encoder, p *Plugin) error {
 		if err := encodeMapStart(enc, "Ok"); err != nil {
 			return err
 		}
-		var ret any = nil
-		return enc.EncodeValue(reflect.ValueOf(&ret))
+		return enc.EncodeNil()
 	case error:
 		return encodeErrorResponse(enc, flattenError(dt))
 	case metadata:
@@ -378,6 +378,26 @@ func (cr *callResponse) encodeMsgpack(enc *msgpack.Encoder, p *Plugin) error {
 			return err
 		}
 		return enc.EncodeValue(reflect.ValueOf(&dt))
+	case []DynamicSuggestion:
+		// either
+		// None - couldn’t find any suggestions, please fall back to default completions
+		// Some(vec![]): there are no suggestions
+		// Some(vec![item1, item2]): item1 and item2 are available
+		if err := encodeMapStart(enc, "CompletionItems"); err != nil {
+			return err
+		}
+		if dt == nil {
+			return enc.EncodeNil()
+		}
+		if err := enc.EncodeArrayLen(len(dt)); err != nil {
+			return fmt.Errorf("encoding completions length: %w", err)
+		}
+		for _, v := range dt {
+			if err := v.encodeMsgpack(enc, p); err != nil {
+				return err
+			}
+		}
+		return nil
 	case []*Command:
 		if err := encodeMapStart(enc, "Signature"); err != nil {
 			return err

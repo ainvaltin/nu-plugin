@@ -1,3 +1,6 @@
+## [2026-03-15]
+Initial support for parameter/flag autocomplete.
+
 ## [2026-03-07]
 Update Type support
  - There is no longer `ListStream` and `Signature` types;

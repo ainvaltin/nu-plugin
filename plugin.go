@@ -207,9 +207,64 @@ func (p *Plugin) handleCall(ctx context.Context, msg call) error {
 		return p.handleMetadata(ctx, msg.ID)
 	case customValueOp:
 		return p.handleCustomValueOp(ctx, msg.ID, m)
+	case getCompletion:
+		return p.handleGetCompletion(ctx, msg.ID, m)
 	default:
 		return fmt.Errorf("unknown Call message %T", m)
 	}
+}
+
+func (p *Plugin) handleGetCompletion(ctx context.Context, callID int, data getCompletion) error {
+	// find the command
+	cmd, ok := p.cmds[data.Name]
+	if !ok {
+		return fmt.Errorf("unknown command %q", data.Name)
+	}
+
+	rsp := []DynamicSuggestion(nil)
+
+	// find the flag/param which triggered completion
+	if data.ArgType.Flag != "" {
+		for _, v := range cmd.Signature.Named {
+			if v.Long == data.ArgType.Flag {
+				p.log.DebugContext(ctx, fmt.Sprintf("complete flag %q: %+v", v.Long, v))
+				if v.GetCompletions != nil {
+					rsp = v.GetCompletions()
+				}
+				break
+			}
+		}
+	} else if data.ArgType.Positional != nil {
+		arg, err := getPosArg(cmd.Signature, int(*data.ArgType.Positional))
+		if err != nil {
+			return err
+		}
+		p.log.DebugContext(ctx, fmt.Sprintf("complete argument: %+v", arg))
+		if arg.GetCompletions != nil {
+			rsp = arg.GetCompletions()
+		}
+	} else {
+		return fmt.Errorf("arg type is neither flag nor positional: %s", data.ArgType)
+	}
+
+	return p.outputMsg(ctx, &callResponse{ID: callID, Response: rsp})
+}
+
+func getPosArg(sig PluginSignature, idx int) (PositionalArg, error) {
+	if idx < len(sig.RequiredPositional) {
+		return sig.RequiredPositional[idx], nil
+	}
+
+	idx -= len(sig.RequiredPositional)
+	if idx < len(sig.OptionalPositional) {
+		return sig.OptionalPositional[idx], nil
+	}
+
+	idx -= len(sig.OptionalPositional)
+	if idx == 0 && sig.RestPositional != nil {
+		return *sig.RestPositional, nil
+	}
+	return PositionalArg{}, fmt.Errorf("positional argument index out of bounds: %d", idx)
 }
 
 func (p *Plugin) handleCustomValueOp(ctx context.Context, callID int, cvOp customValueOp) error {
