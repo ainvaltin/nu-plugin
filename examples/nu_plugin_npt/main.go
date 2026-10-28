@@ -41,6 +41,7 @@ func main() {
 			// actual demo commands
 			cmdCompletion(),
 			cmdEcho(),
+			cmdError(),
 			cmdWhat(),
 			cmdEngineCalls(),
 		},

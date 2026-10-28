@@ -40,7 +40,7 @@ To list all keys in all top level buckets
 ```nushell
 boltval ~/data/test.db | $in.0.buckets | each {|| $in.values} | flatten
 ```
-omitting the `path` argument means that the root bucket is selected so `$in.buckets` in the
+omitting the `path` argument means that the root bucket is selected so `$in.0.buckets` in the
 next step lists all the root buckets... alternatively
 
 ```nushell
