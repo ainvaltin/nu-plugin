@@ -3,7 +3,7 @@ module github.com/ainvaltin/nu-plugin/examples/nu_plugin_bbolt
 go 1.24.0
 
 require (
-	github.com/ainvaltin/nu-plugin v0.0.0-20261024093927-83d7479f7b3d
+	github.com/ainvaltin/nu-plugin v0.0.0-20261124112122-868d13ed2902
 	github.com/google/go-cmp v0.7.0
 	go.etcd.io/bbolt v1.4.3
 )
