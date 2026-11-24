@@ -8,6 +8,11 @@
 *.so
 *.dylib
 */*/nu_plugin_bbolt
+*/*/nu_plugin_npt
+examples/*/input.log
+examples/*/output.log
+examples/*/log.txt
+
 
 # Test binary, built with `go test -c`
 *.test
