@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/ainvaltin/nu-plugin/internal/mpack"
 	"github.com/vmihailenco/msgpack/v5"
 )
 
@@ -107,10 +108,7 @@ Set an environment variable in the caller's scope. The environment variable can 
 be propagated to the caller's scope if called before the plugin call response is sent.
 */
 func (ec *ExecCommand) AddEnvVar(ctx context.Context, name string, value Value) error {
-	type param struct {
-		Var []any `msgpack:"AddEnvVar"`
-	}
-	v, err := ec.engineCallValueReturn(ctx, param{Var: []any{name, &value}})
+	v, err := ec.engineCallValueReturn(ctx, &addEnvVar{ec.p, name, value})
 	if err != nil {
 		return err
 	}
@@ -118,6 +116,30 @@ func (ec *ExecCommand) AddEnvVar(ctx context.Context, name string, value Value) 
 		return nil
 	}
 	return fmt.Errorf("unexpected return value %v", v.Value)
+}
+
+type addEnvVar struct {
+	p     *Plugin
+	name  string
+	value Value
+}
+
+var _ msgpack.CustomEncoder = (*addEnvVar)(nil)
+
+func (ev *addEnvVar) EncodeMsgpack(enc *msgpack.Encoder) error {
+	if err := mpack.EncodeMapStart(enc, "AddEnvVar"); err != nil {
+		return err
+	}
+
+	if err := enc.EncodeArrayLen(2); err != nil {
+		return err
+	}
+
+	if err := enc.EncodeString(ev.name); err != nil {
+		return err
+	}
+
+	return ev.value.encodeMsgpack(enc, ev.p)
 }
 
 /*
